@@ -16,6 +16,11 @@ inline bool Binder_Util_StartsWith(const std::string &theStr,
   return theStr.rfind(thePrefix, 0) == 0;
 }
 
+inline bool Binder_Util_StrContains(const std::string &theStr,
+                                    const std::string &theSub) {
+  return theStr.find(theSub) != std::string::npos;
+}
+
 template <typename Iter_, typename Fn_>
 std::string Binder_Util_Join(Iter_ theFirst, Iter_ theLast, Fn_ theFn,
                              const std::string &theSep = ",");

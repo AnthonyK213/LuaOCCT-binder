@@ -167,18 +167,49 @@ static std::string generateMethod(const Binder_Cursor &theClass,
   return oss.str();
 }
 
+struct Binder_MethodGroup {
+public:
+  void Add(const Binder_Cursor &theMethod) { myMethods.push_back(theMethod); }
+
+  std::size_t Size() const { return myMethods.size(); };
+
+  bool HasOverload() const { return Size() > 1; }
+
+  std::vector<Binder_Cursor> Methods() const {
+    std::vector<Binder_Cursor> aResult{};
+    std::copy_if(
+        myMethods.cbegin(), myMethods.cend(), std::back_inserter(aResult),
+        [](const Binder_Cursor &theMethod) {
+          return !isIgnoredMethod(theMethod) && !theMethod.IsStaticMethod();
+        });
+
+    return aResult;
+  }
+
+  std::vector<Binder_Cursor> StaticMethods() const {
+    std::vector<Binder_Cursor> aResult{};
+    std::copy_if(
+        myMethods.cbegin(), myMethods.cend(), std::back_inserter(aResult),
+        [](const Binder_Cursor &theMethod) {
+          return !isIgnoredMethod(theMethod) && theMethod.IsStaticMethod();
+        });
+
+    return aResult;
+  }
+
+private:
+  std::vector<Binder_Cursor> myMethods{};
+};
+
 static bool generateMethods(const Binder_Cursor &theClass,
                             std::ostream &theStream) {
   std::string aClassSpelling = theClass.Spelling();
   std::vector<Binder_Cursor> aMethods =
       theClass.GetChildrenOfKind(CXCursor_CXXMethod);
 
-  std::map<std::string, std::vector<Binder_Cursor>> aGroups{};
-  std::map<std::string, int> aOverloads{};
+  std::map<std::string, Binder_MethodGroup> aGroups{};
 
   // Group cxxmethods by name.
-  // An "ignored" method only increases the count in `aOverloads`, but won't be
-  // added to `aGroups`.
   for (const auto &aMethod : aMethods) {
     std::string aFuncSpelling = aMethod.Spelling();
 
@@ -194,46 +225,55 @@ static bool generateMethods(const Binder_Cursor &theClass,
       }
     }
 
-    if (aGroups.find(aFuncSpelling) != aGroups.end()) {
-      if (!isIgnoredMethod(aMethod)) {
-        aGroups[aFuncSpelling].push_back(aMethod);
-      }
+    if (Binder_Util_Contains(aGroups, aFuncSpelling)) {
+      aGroups[aFuncSpelling].Add(aMethod);
     } else {
-      aOverloads.insert({aFuncSpelling, 0});
-
-      if (!isIgnoredMethod(aMethod)) {
-        aGroups.insert({aFuncSpelling, std::vector<Binder_Cursor>{aMethod}});
-      }
+      Binder_MethodGroup aGrp{};
+      aGrp.Add(aMethod);
+      aGroups.insert({aFuncSpelling, std::move(aGrp)});
     }
-
-    aOverloads[aFuncSpelling]++;
   }
 
   // Bind methods.
   for (auto anIter = aGroups.cbegin(); anIter != aGroups.cend(); ++anIter) {
-    const std::vector<Binder_Cursor> &aMethodGroup = anIter->second;
+    const Binder_MethodGroup &aMethodGroup = anIter->second;
+    const std::vector<Binder_Cursor> aMtd = aMethodGroup.Methods();
+    const std::vector<Binder_Cursor> aMtdSt = aMethodGroup.StaticMethods();
 
-    if (aMethodGroup.empty())
-      continue;
+    if (!aMtd.empty()) {
+      theStream << ".addFunction(\"" << anIter->first << "\",";
 
-    theStream << '.'
-              << (aMethodGroup[0].IsStaticMethod() ? "addStaticFunction"
-                                                   : "addFunction")
-              << "(\"" << anIter->first << "\", ";
+      if (aMethodGroup.HasOverload()) {
+        theStream << Binder_Util_Join(
+            aMtd.cbegin(), aMtd.cend(), [&](const Binder_Cursor &theMethod) {
+              return generateMethod(theClass, theMethod, true);
+            });
+      } else {
+        theStream << generateMethod(theClass, aMtd[0]);
+      }
 
-    if (aMethodGroup.size() == 1 &&
-        aOverloads[anIter->first] ==
-            1) { /* Make sure there is no any overload method */
-      theStream << generateMethod(theClass, aMethodGroup[0]);
-    } else { /* Handle the overloads */
-      theStream << Binder_Util_Join(aMethodGroup.cbegin(), aMethodGroup.cend(),
-                                    [&](const Binder_Cursor &theMethod) {
-                                      return generateMethod(theClass, theMethod,
-                                                            true);
-                                    });
+      theStream << ")\n";
     }
 
-    theStream << ")\n";
+    if (!aMtdSt.empty()) {
+      theStream << ".addStaticFunction(\"" << anIter->first
+                << (aMtd.empty()
+                        ? ""
+                        : "_") /* Add a "_" if there is non-static overload. */
+                << "\",";
+
+      if (aMethodGroup.HasOverload()) {
+        theStream << Binder_Util_Join(aMtdSt.cbegin(), aMtdSt.cend(),
+                                      [&](const Binder_Cursor &theMethod) {
+                                        return generateMethod(theClass,
+                                                              theMethod, true);
+                                      });
+      } else {
+        theStream << generateMethod(theClass, aMtdSt[0]);
+      }
+
+      theStream << ")\n";
+    }
   }
 
   // DownCast from Standard_Transient
@@ -247,18 +287,27 @@ static bool generateMethods(const Binder_Cursor &theClass,
 }
 
 static bool generateClass(const Binder_Cursor &theClass,
-                          std::ostream &theStream) {
+                          std::ostream &theStream,
+                          const Binder_Generator *theParent) {
   std::string aClassSpelling = theClass.Spelling();
   std::cout << "Binding class: " << aClassSpelling << '\n';
   std::vector<Binder_Cursor> aBases = theClass.Bases();
 
-  if (aBases.empty()) {
-    theStream << ".beginClass<" << aClassSpelling << ">(\"" << aClassSpelling
-              << "\")\n";
-  } else {
+  bool baseRegistered = false;
+  for (const auto aBase : aBases) {
+    if (theParent->IsClassVisited(aBase.Spelling())) {
+      baseRegistered = true;
+      break;
+    }
+  }
+
+  if (baseRegistered) {
     theStream << ".deriveClass<" << aClassSpelling << ", "
               << aBases[0].GetDefinition().Spelling() << ">(\""
               << aClassSpelling << "\")\n";
+  } else {
+    theStream << ".beginClass<" << aClassSpelling << ">(\"" << aClassSpelling
+              << "\")\n";
   }
 
   generateCtor(theClass, theStream);
@@ -300,25 +349,25 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   for (const auto &aClass : aClasses) {
     std::string aClassSpelling = aClass.Spelling();
 
-    if (aClassSpelling.rfind(myName, 0) != 0)
+    if (!Binder_Util_StartsWith(aClassSpelling, myName))
       continue;
 
-    if (aClassSpelling.rfind("Handle", 0) == 0)
+    if (Binder_Util_StartsWith(aClassSpelling, "Handle"))
       continue;
 
-    if (aClassSpelling.rfind("NCollection", 0) == 0)
+    if (Binder_Util_StartsWith(aClassSpelling, "NCollection"))
       continue;
 
-    if (aClassSpelling.rfind("TCol", 0) == 0)
+    if (Binder_Util_StartsWith(aClassSpelling, "TCol"))
       continue;
 
-    if (aClassSpelling.find("Sequence") != std::string::npos)
+    if (Binder_Util_StrContains(aClassSpelling, "Sequence"))
       continue;
 
-    if (aClassSpelling.find("Array") != std::string::npos)
+    if (Binder_Util_StrContains(aClassSpelling, "Array"))
       continue;
 
-    if (aClassSpelling.find("List") != std::string::npos)
+    if (Binder_Util_StrContains(aClassSpelling, "List"))
       continue;
 
     if (aClassSpelling == "Standard")
@@ -330,7 +379,7 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (!myParent->AddVisitedClass(aClassSpelling))
       continue;
 
-    generateClass(aClass, aStream);
+    generateClass(aClass, aStream, myParent);
   }
 
   aStream << ".endNamespace()\n.endNamespace();\n}\n";

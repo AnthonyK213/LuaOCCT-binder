@@ -29,9 +29,18 @@ int main(int argc, char const *argv[]) {
                      "-DCSFDB", "-DHAVE_CONFIG_H"})
       .SetExportDir(argv[3]);
 
+  /* clang-format off */
+
   std::vector<std::string> aMods = {
-      "Standard", "gp", "Geom", "TopoDS", "Poly", "BRepBuilderAPI",
+      "Standard",
+      "gp",
+      "Geom",
+      "TopoDS",
+      "Poly",
+      "BRepBuilderAPI",
   };
+
+  /* clang-format on */
 
   for (const std::string &aModName : aMods) {
     auto aMod = std::make_shared<Binder_Module>(aModName, aGenerator);

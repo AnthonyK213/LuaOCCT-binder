@@ -62,6 +62,8 @@ public:
 
   bool AddVisitedClass(const std::string &theClass);
 
+  bool IsClassVisited(const std::string &theClass) const;
+
   bool Parse();
 
   bool Generate(const std::string &theExportDir = ".");

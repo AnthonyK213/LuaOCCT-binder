@@ -1,5 +1,6 @@
 ﻿#include "Binder_Generator.hxx"
 #include "Binder_Module.hxx"
+#include "Binder_Util.hxx"
 
 Binder_Generator::Binder_Generator() : myCurMod(nullptr), myExportDir(".") {}
 
@@ -28,4 +29,8 @@ int Binder_Generator::Save(const std::string &theFilePath) const {
 
 bool Binder_Generator::Load(const std::string &theFilePath) {
   return MOD_CALL(load(theFilePath));
+}
+
+bool Binder_Generator::IsClassVisited(const std::string &theClass) const {
+  return Binder_Util_Contains(myVisitedClasses, theClass);
 }

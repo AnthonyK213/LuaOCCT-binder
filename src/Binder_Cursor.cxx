@@ -56,21 +56,14 @@ bool Binder_Cursor::IsImmutable() const {
   if (aType.IsPointerLike())
     aType = aType.GetPointee();
 
-  if (Binder_Util_Contains(binder::IMMUTABLE_TYPE, aType.Spelling()))
+  Binder_Type originType =
+      clang_getTypedefDeclUnderlyingType(aType.GetDeclaration());
+
+  if (Binder_Util_Contains(binder::IMMUTABLE_TYPE,
+                           aType.GetDeclaration().Spelling()) ||
+      Binder_Util_Contains(binder::IMMUTABLE_TYPE,
+                           originType.GetDeclaration().Spelling()))
     return true;
-
-  static const std::set<std::string> IMUTABLE_BASES{"NCollection_Array1",
-                                                    "NCollection_Array2"};
-
-  std::vector<Binder_Cursor> aBases = aType.GetDeclaration().Bases();
-  for (const auto &aBase : aBases) {
-    if (Binder_Util_StartsWith(aType.GetDeclaration().Spelling(), "TCol"))
-      std::cout << aBase.Spelling();
-
-    if (Binder_Util_Contains(IMUTABLE_BASES, aBase.Spelling())) {
-      return true;
-    }
-  }
 
   return false;
 }
@@ -79,7 +72,12 @@ bool Binder_Cursor::NeedsInOutMethod() const {
   for (auto &p : Parameters()) {
     Binder_Type aType = p.Type();
 
-    if (p.IsImmutable() && !aType.IsConstQualified() && aType.IsPointerLike()) {
+    if (!aType.IsPointerLike())
+      continue;
+
+    aType = aType.GetPointee();
+
+    if (p.IsImmutable() && !aType.IsConstQualified()) {
       return true;
     }
   }
