@@ -276,6 +276,10 @@ static bool generateMethods(const Binder_Cursor &theClass,
     }
   }
 
+  if (Binder_Util_Contains(binder::EXTRA_METHODS, aClassSpelling)) {
+    theStream << binder::EXTRA_METHODS.at(aClassSpelling);
+  }
+
   // DownCast from Standard_Transient
   if (theClass.IsTransient()) {
     theStream << ".addStaticFunction(\"DownCast\", +[](const "
@@ -373,13 +377,22 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (aClassSpelling == "Standard")
       continue;
 
-    if (aClass.GetChildren().empty())
-      continue;
+    // Handle forward declaration.
+    // To make sure the binding order is along the inheritance tree.
+
+    Binder_Cursor aClassDef = aClass.GetDefinition();
+
+    if (aClass.GetChildren().empty()) {
+      aClassDef = aClass.GetDefinition();
+
+      if (aClassDef.IsNull())
+        continue;
+    }
 
     if (!myParent->AddVisitedClass(aClassSpelling))
       continue;
 
-    generateClass(aClass, aStream, myParent);
+    generateClass(aClassDef, aStream, myParent);
   }
 
   aStream << ".endNamespace()\n.endNamespace();\n}\n";
