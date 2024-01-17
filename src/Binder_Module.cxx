@@ -8,6 +8,7 @@
 #include <iterator>
 #include <map>
 #include <sstream>
+#include <string>
 #include <vector>
 
 Binder_Module::Binder_Module(const std::string &theName,
@@ -299,7 +300,8 @@ static bool generateClass(const Binder_Cursor &theClass,
 
   bool baseRegistered = false;
   for (const auto aBase : aBases) {
-    if (theParent->IsClassVisited(aBase.Spelling())) {
+    // NOTE: Use definition spelling!
+    if (theParent->IsClassVisited(aBase.GetDefinition().Spelling())) {
       baseRegistered = true;
       break;
     }
