@@ -380,19 +380,22 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     // Handle forward declaration.
     // To make sure the binding order is along the inheritance tree.
 
-    Binder_Cursor aClassDef = aClass.GetDefinition();
+    // Binder_Cursor aClassDef = aClass.GetDefinition();
 
-    if (aClass.GetChildren().empty()) {
-      aClassDef = aClass.GetDefinition();
+    // if (aClass.GetChildren().empty()) {
+    //   aClassDef = aClass.GetDefinition();
 
-      if (aClassDef.IsNull())
-        continue;
-    }
+    //   if (aClassDef.IsNull())
+    //     continue;
+    // }
+
+    if (aClass.GetChildren().empty())
+      continue;
 
     if (!myParent->AddVisitedClass(aClassSpelling))
       continue;
 
-    generateClass(aClassDef, aStream, myParent);
+    generateClass(aClass, aStream, myParent);
   }
 
   aStream << ".endNamespace()\n.endNamespace();\n}\n";
