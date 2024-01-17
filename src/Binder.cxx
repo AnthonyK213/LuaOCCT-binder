@@ -33,11 +33,17 @@ int main(int argc, char const *argv[]) {
 
   std::vector<std::string> aMods = {
       "Standard",
+      "GeomAbs",
+      "TopAbs",
       "gp",
       "Geom",
       "TopoDS",
+      "TopExp",
+      "TopLoc",
       "Poly",
       "BRepBuilderAPI",
+      "BRep",
+      "BRepLib",
   };
 
   /* clang-format on */

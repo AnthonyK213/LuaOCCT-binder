@@ -175,6 +175,10 @@ public:
   std::vector<Binder_Cursor> Parameters() const {
     return GetChildrenOfKind(CXCursor_ParmDecl);
   }
+  
+  std::vector<Binder_Cursor> EnumConsts() const {
+    return GetChildrenOfKind(CXCursor_EnumConstantDecl);
+  }
 
   bool NeedsInOutMethod() const;
 

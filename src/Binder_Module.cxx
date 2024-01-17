@@ -51,6 +51,32 @@ bool Binder_Module::parse() {
   return true;
 }
 
+static bool generateEnum(const Binder_Cursor &theEnum,
+                         std::ostream &theStream) {
+  std::vector<Binder_Cursor> anEnumConsts = theEnum.EnumConsts();
+
+  if (anEnumConsts.empty())
+    return false;
+
+  std::string anEnumSpelling = theEnum.Spelling();
+
+  if (anEnumSpelling.empty())
+    return false;
+
+  theStream << ".beginNamespace(\"" << anEnumSpelling << "\")\n";
+
+  for (const auto anEnumConst : anEnumConsts) {
+    std::string anEnumConstSpelling = anEnumConst.Spelling();
+    theStream << ".addProperty(\"" << anEnumConstSpelling
+              << "\",+[](){ return " << anEnumSpelling
+              << "::" << anEnumConstSpelling << "; })\n";
+  }
+
+  theStream << ".endNamespace()\n\n";
+
+  return true;
+}
+
 static bool generateCtor(const Binder_Cursor &theClass,
                          std::ostream &theStream) {
   if (theClass.IsAbstract())
@@ -132,17 +158,17 @@ static std::string generateMethod(const Binder_Cursor &theClass,
     oss << "+[](const " << aClassSpelling << " &theSelf";
     if (aMethodSpelling == "operator-") { /* __unm */
       if (aParams.empty()) {
-        oss << ") { return -theSelf; }";
+        oss << "){ return -theSelf; }";
       } else { /* __sub */
         oss << ',' << aParams[0].Type().Spelling()
-            << " theOther) { return theSelf-theOther; }";
+            << " theOther){ return theSelf-theOther; }";
       }
     } else {
       if (aParams.empty())
         return "";
 
       oss << ',' << aParams[0].Type().Spelling()
-          << " theOther) { return theSelf" << aMethodSpelling.substr(8)
+          << " theOther){ return theSelf" << aMethodSpelling.substr(8)
           << "theOther; }";
     }
 
@@ -283,8 +309,8 @@ static bool generateMethods(const Binder_Cursor &theClass,
 
   // DownCast from Standard_Transient
   if (theClass.IsTransient()) {
-    theStream << ".addStaticFunction(\"DownCast\", +[](const "
-                 "Handle(Standard_Transient) &h) { return Handle("
+    theStream << ".addStaticFunction(\"DownCast\",+[](const "
+                 "Handle(Standard_Transient) &h){ return Handle("
               << aClassSpelling << ")::DownCast(h); })\n";
   }
 
@@ -339,8 +365,6 @@ bool Binder_Module::generate(const std::string &theExportDir) {
 
   // The source file.
   aStream = std::ofstream(theExportName + ".cpp");
-  std::vector<Binder_Cursor> aClasses =
-      aCursor.GetChildrenOfKind(CXCursor_ClassDecl);
 
   aStream << "/* This file is generated, do not edit. */\n\n";
   aStream << "#include \"l" << myName << ".h\"\n\n";
@@ -349,9 +373,25 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   aStream << ".beginNamespace(\"LuaOCCT\")\n";
   aStream << ".beginNamespace(\"" << myName << "\")\n\n";
 
-  // TODO: Bind enumerators.
+  // Bind enumerators.
+  std::vector<Binder_Cursor> anEnums = aCursor.Enums();
+
+  for (const auto &anEnum : anEnums) {
+    std::string anEnumSpelling = anEnum.Spelling();
+
+    if (anEnumSpelling.empty())
+      continue;
+
+    if (!myParent->AddVisitedClass(anEnumSpelling))
+      continue;
+
+    generateEnum(anEnum, aStream);
+  }
 
   // Bind classes.
+  std::vector<Binder_Cursor> aClasses =
+      aCursor.GetChildrenOfKind(CXCursor_ClassDecl);
+
   for (const auto &aClass : aClasses) {
     std::string aClassSpelling = aClass.Spelling();
 
