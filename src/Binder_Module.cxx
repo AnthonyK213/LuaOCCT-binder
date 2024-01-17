@@ -67,9 +67,8 @@ static bool generateEnum(const Binder_Cursor &theEnum,
 
   for (const auto anEnumConst : anEnumConsts) {
     std::string anEnumConstSpelling = anEnumConst.Spelling();
-    theStream << ".addProperty(\"" << anEnumConstSpelling
-              << "\",+[](){ return " << anEnumSpelling
-              << "::" << anEnumConstSpelling << "; })\n";
+    theStream << ".addProperty(\"" << anEnumConstSpelling << "\",+[](){ return "
+              << anEnumSpelling << "::" << anEnumConstSpelling << "; })\n";
   }
 
   theStream << ".endNamespace()\n\n";
@@ -104,14 +103,15 @@ static bool generateCtor(const Binder_Cursor &theClass,
     theStream << "void()";
   } else {
     theStream << Binder_Util_Join(
-        aCtors.cbegin(), aCtors.cend(), [](const Binder_Cursor &theCtor) {
+        aCtors.cbegin(), aCtors.cend(), +[](const Binder_Cursor &theCtor) {
           std::ostringstream oss{};
           oss << "void(";
           std::vector<Binder_Cursor> aParams = theCtor.Parameters();
-          oss << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
-                                  [](const Binder_Cursor &theParam) {
-                                    return theParam.Type().Spelling();
-                                  })
+          oss << Binder_Util_Join(
+                     aParams.cbegin(), aParams.cend(),
+                     +[](const Binder_Cursor &theParam) {
+                       return theParam.Type().Spelling();
+                     })
               << ')';
           return oss.str();
         });
@@ -127,9 +127,9 @@ static bool isIgnoredMethod(const Binder_Cursor &theMethod) {
       theMethod.IsFunctionTemplate())
     return true;
 
-  // TODO: IN/OUT parameter
-  if (theMethod.NeedsInOutMethod())
-    return true;
+  // IN/OUT parameter
+  // if (theMethod.NeedsInOutMethod())
+  //   return true;
 
   std::string aFuncSpelling = theMethod.Spelling();
 
@@ -156,6 +156,7 @@ static std::string generateMethod(const Binder_Cursor &theClass,
 
   if (theMethod.IsOperator()) {
     oss << "+[](const " << aClassSpelling << " &theSelf";
+
     if (aMethodSpelling == "operator-") { /* __unm */
       if (aParams.empty()) {
         oss << "){ return -theSelf; }";
@@ -167,25 +168,109 @@ static std::string generateMethod(const Binder_Cursor &theClass,
       if (aParams.empty())
         return "";
 
-      oss << ',' << aParams[0].Type().Spelling()
-          << " theOther){ return theSelf" << aMethodSpelling.substr(8)
-          << "theOther; }";
+      oss << ',' << aParams[0].Type().Spelling() << " theOther){ return theSelf"
+          << aMethodSpelling.substr(8) << "theOther; }";
     }
 
     return oss.str();
   }
 
   if (theMethod.NeedsInOutMethod()) {
-    // TODO: IN/OUT parameter
+    std::vector<Binder_Cursor> anIn{};
+    std::vector<Binder_Cursor> anOut{};
+    theMethod.GetInOutParams(anIn, anOut);
+    bool anIsStatic = theMethod.IsStaticMethod();
+
+    oss << "+[](";
+
+    if (!anIsStatic) {
+      if (theMethod.IsConstMethod())
+        oss << "const ";
+
+      oss << aClassSpelling << " &__theSelf__";
+
+      if (!anIn.empty())
+        oss << ',';
+    }
+
+    oss << Binder_Util_Join(
+        anIn.cbegin(), anIn.cend(), +[](const Binder_Cursor &theParam) {
+          return theParam.Type().Spelling() + " " + theParam.Spelling();
+        });
+
+    Binder_Type aRetType = theMethod.ReturnType();
+    std::string aRetTypeSpelling = aRetType.Spelling();
+    bool anHasRetVal = aRetTypeSpelling != "void";
+    bool anTupleOut = anHasRetVal || anOut.size() > 1;
+
+    if (anTupleOut) {
+      oss << ")->std::tuple<";
+
+      if (anHasRetVal)
+        oss << aRetTypeSpelling << ',';
+
+      oss << Binder_Util_Join(
+                 anOut.cbegin(), anOut.cend(),
+                 +[](const Binder_Cursor &theParam) {
+                   return theParam.Type().GetPointee().Spelling();
+                 })
+          << "> { ";
+    } else {
+      oss << ")->" << anOut[0].Type().GetPointee().Spelling() << " { ";
+    }
+
+    for (const auto &anOutParam : anOut) {
+      oss << anOutParam.Type().GetPointee().Spelling() << ' '
+          << anOutParam.Spelling() << "{};";
+    }
+
+    if (anHasRetVal) {
+      oss << aRetTypeSpelling << " __theRet__=";
+    }
+
+    if (anIsStatic) {
+      oss << aClassSpelling << "::";
+    } else {
+      oss << "__theSelf__.";
+    }
+
+    oss << aMethodSpelling << "("
+        << Binder_Util_Join(
+               aParams.cbegin(), aParams.cend(),
+               +[](const Binder_Cursor &theParam) {
+                 if (theParam.Type().IsPointer()) {
+                   return "&" + theParam.Spelling();
+                 }
+                 return theParam.Spelling();
+               })
+        << ");";
+
+    if (anTupleOut) {
+      oss << "return {";
+
+      if (anHasRetVal) {
+        oss << "__theRet__,";
+      }
+
+      oss << Binder_Util_Join(
+                 anOut.cbegin(), anOut.cend(),
+                 +[](const Binder_Cursor &theParam) {
+                   return theParam.Spelling();
+                 })
+          << "}; }";
+    } else {
+      oss << "return " << anOut[0].Spelling() << "; }";
+    }
+
     return oss.str();
   }
 
   if (theIsOverload) {
     oss << "luabridge::overload<";
-    oss << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
-                            [](const Binder_Cursor &theParam) {
-                              return theParam.Type().Spelling();
-                            });
+    oss << Binder_Util_Join(
+        aParams.cbegin(), aParams.cend(), +[](const Binder_Cursor &theParam) {
+          return theParam.Type().Spelling();
+        });
     oss << ">(&" << aClassSpelling << "::" << aMethodSpelling << ')';
   } else {
     oss << '&' << aClassSpelling << "::" << aMethodSpelling;

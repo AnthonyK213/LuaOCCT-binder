@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
-
 project(
   luaocct-binder
   VERSION 0.0.1
@@ -23,16 +21,9 @@ if(EXISTS "${LOC_PATH}")
   build subdirectory. Feel free to remove CMakeCache.txt and CMakeFiles.")
 endif()
 
-option(ENABLE_UNIT_TESTS "Enable unit tests" OFF)
-option(INSTALL_GTEST "Enable installation of googletest. (Projects embedding googletest may want to turn this OFF.)" OFF)
-message(STATUS "Enable testing: ${ENABLE_UNIT_TESTS}")
-
-find_package(LuaJIT REQUIRED)
-message("LuaJIT-Include-Dir: ${LUA_INCLUDE_DIR}")
-message("LuaJIT-Libs: ${LUA_LIBRARIES}")
-
-find_path(LuaBridge3_INCLUDE_DIR NAMES LuaBridge PATH_SUFFIXES luabridge3)
-message("LuaBridge3-Include-Dir: ${LuaBridge3_INCLUDE_DIR}")
+# option(ENABLE_UNIT_TESTS "Enable unit tests" OFF)
+# option(INSTALL_GTEST "Enable installation of googletest. (Projects embedding googletest may want to turn this OFF.)" OFF)
+# message(STATUS "Enable testing: ${ENABLE_UNIT_TESTS}")
 
 find_package(libclang REQUIRED)
 message("LIBCLANG-Include-Dir: ${LIBCLANG_INCLUDE_DIR}")

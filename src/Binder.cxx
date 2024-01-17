@@ -2,6 +2,9 @@
 
 #include <sstream>
 
+/// arg[1]: OpenCASCADE include directory;
+/// arg[2]: Module header directory;
+/// arg[3]: Export directory;
 int main(int argc, char const *argv[]) {
   if (argc < 4) {
     std::cerr << "Args?\n";

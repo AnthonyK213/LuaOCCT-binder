@@ -85,6 +85,24 @@ bool Binder_Cursor::NeedsInOutMethod() const {
   return false;
 }
 
+void Binder_Cursor::GetInOutParams(std::vector<Binder_Cursor> &theIn,
+                                   std::vector<Binder_Cursor> &theOut) const {
+  for (auto &p : Parameters()) {
+    Binder_Type aType = p.Type();
+
+    if (aType.IsPointerLike()) {
+      aType = aType.GetPointee();
+
+      if (p.IsImmutable() && !aType.IsConstQualified()) {
+        theOut.push_back(p);
+        continue;
+      }
+    }
+
+    theIn.push_back(p);
+  }
+}
+
 bool Binder_Cursor::NeedsDefaultCtor() const {
   if (IsAbstract())
     return false;
