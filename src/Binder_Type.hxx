@@ -13,7 +13,7 @@ public:
 
   ~Binder_Type();
 
-  operator CXType() { return myType; }
+  operator CXType() const { return myType; }
 
   std::string Spelling() const;
 

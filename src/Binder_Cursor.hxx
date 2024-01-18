@@ -11,7 +11,7 @@ public:
 
   ~Binder_Cursor();
 
-  operator CXCursor() { return myCursor; }
+  operator CXCursor() const { return myCursor; }
 
   CXCursorKind Kind() const { return clang_getCursorKind(myCursor); }
 

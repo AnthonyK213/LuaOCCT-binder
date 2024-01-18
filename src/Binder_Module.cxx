@@ -51,16 +51,30 @@ bool Binder_Module::parse() {
   return true;
 }
 
-static bool generateEnumCast(const Binder_Cursor &theEnum,
-                             std::ostream &theStream) {
-  std::vector<Binder_Cursor> anEnumConsts = theEnum.EnumConsts();
+static bool generateEnum(const Binder_Cursor &theEnum,
+                         std::string &theEnumSpelling,
+                         std::vector<Binder_Cursor> &theEnumConsts) {
+  theEnumConsts = theEnum.EnumConsts();
 
-  if (anEnumConsts.empty())
+  if (theEnumConsts.empty())
     return false;
 
-  std::string anEnumSpelling = theEnum.Spelling();
+  theEnumSpelling = theEnum.Spelling();
 
-  if (anEnumSpelling.empty())
+  // FIXME: (unnamed enum at ...) ???
+  if (theEnumSpelling.empty() ||
+      Binder_Util_StrContains(theEnumSpelling, "unnamed enum"))
+    return false;
+
+  return true;
+}
+
+static bool generateEnumCast(const Binder_Cursor &theEnum,
+                             std::ostream &theStream) {
+  std::string anEnumSpelling{};
+  std::vector<Binder_Cursor> anEnumConsts{};
+
+  if (!generateEnum(theEnum, anEnumSpelling, anEnumConsts))
     return false;
 
   std::cout << "Binding enum cast: " << anEnumSpelling << '\n';
@@ -77,16 +91,12 @@ static bool generateEnumCast(const Binder_Cursor &theEnum,
   return true;
 }
 
-static bool generateEnum(const Binder_Cursor &theEnum,
-                         std::ostream &theStream) {
-  std::vector<Binder_Cursor> anEnumConsts = theEnum.EnumConsts();
+static bool generateEnumValue(const Binder_Cursor &theEnum,
+                              std::ostream &theStream) {
+  std::string anEnumSpelling{};
+  std::vector<Binder_Cursor> anEnumConsts{};
 
-  if (anEnumConsts.empty())
-    return false;
-
-  std::string anEnumSpelling = theEnum.Spelling();
-
-  if (anEnumSpelling.empty())
+  if (!generateEnum(theEnum, anEnumSpelling, anEnumConsts))
     return false;
 
   std::cout << "Binding enum: " << anEnumSpelling << '\n';
@@ -515,7 +525,7 @@ bool Binder_Module::generate(const std::string &theExportDir) {
       continue;
 
     generateEnumCast(anEnum, aStream);
-    generateEnum(anEnum, anEnumChuck);
+    generateEnumValue(anEnum, anEnumChuck);
   }
 
   aStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
