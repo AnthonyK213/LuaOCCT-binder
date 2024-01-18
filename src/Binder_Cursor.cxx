@@ -62,7 +62,8 @@ bool Binder_Cursor::IsImmutable() const {
   if (Binder_Util_Contains(binder::IMMUTABLE_TYPE,
                            aType.GetDeclaration().Spelling()) ||
       Binder_Util_Contains(binder::IMMUTABLE_TYPE,
-                           originType.GetDeclaration().Spelling()))
+                           originType.GetDeclaration().Spelling()) ||
+      aType.GetDeclaration().IsEnum())
     return true;
 
   return false;
@@ -214,4 +215,13 @@ Binder_Cursor::GetChildrenOfKind(CXCursorKind theKind,
 
 std::string Binder_Cursor::Docs() const {
   return Binder_Util_GetCString(clang_Cursor_getBriefCommentText(myCursor));
+}
+
+bool Binder_Cursor::IsStaticClass() const {
+  for (const auto &aMethod : Methods()) {
+    if (aMethod.IsPublic() && !aMethod.IsStaticMethod())
+      return false;
+  }
+
+  return true;
 }

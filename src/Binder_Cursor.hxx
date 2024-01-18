@@ -107,6 +107,8 @@ public:
 
   bool IsStaticMethod() const { return clang_CXXMethod_isStatic(myCursor); }
 
+  bool IsStaticClass() const;
+
   bool IsMoveCtor() const {
     return clang_CXXConstructor_isMoveConstructor(myCursor);
   }
@@ -152,8 +154,8 @@ public:
     return GetChildrenOfKind(CXCursor_CXXBaseSpecifier);
   }
 
-  std::vector<Binder_Cursor> Ctors() const {
-    return GetChildrenOfKind(CXCursor_Constructor);
+  std::vector<Binder_Cursor> Ctors(bool thePublicOnly = false) const {
+    return GetChildrenOfKind(CXCursor_Constructor, thePublicOnly);
   }
 
   std::vector<Binder_Cursor> Dtors() const {

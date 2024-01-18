@@ -47,6 +47,8 @@ int main(int argc, char const *argv[]) {
       "BRepBuilderAPI",
       "BRep",
       "BRepLib",
+      "Bnd",
+      "Precision",
   };
 
   /* clang-format on */
@@ -63,6 +65,8 @@ int main(int argc, char const *argv[]) {
       return 2;
     }
   }
+
+  aGenerator.GenerateMain(aMods);
 
   return 0;
 }

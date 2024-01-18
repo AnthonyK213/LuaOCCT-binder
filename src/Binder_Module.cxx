@@ -51,6 +51,32 @@ bool Binder_Module::parse() {
   return true;
 }
 
+static bool generateEnumCast(const Binder_Cursor &theEnum,
+                             std::ostream &theStream) {
+  std::vector<Binder_Cursor> anEnumConsts = theEnum.EnumConsts();
+
+  if (anEnumConsts.empty())
+    return false;
+
+  std::string anEnumSpelling = theEnum.Spelling();
+
+  if (anEnumSpelling.empty())
+    return false;
+
+  std::cout << "Binding enum cast: " << anEnumSpelling << '\n';
+
+  theStream << "template<> struct luabridge::Stack<" << anEnumSpelling
+            << "> : luabridge::Enum<" << anEnumSpelling << ','
+            << Binder_Util_Join(anEnumConsts.cbegin(), anEnumConsts.cend(),
+                                [&](const Binder_Cursor &theEnumConst) {
+                                  return anEnumSpelling +
+                                         "::" + theEnumConst.Spelling();
+                                })
+            << ">{};\n";
+
+  return true;
+}
+
 static bool generateEnum(const Binder_Cursor &theEnum,
                          std::ostream &theStream) {
   std::vector<Binder_Cursor> anEnumConsts = theEnum.EnumConsts();
@@ -62,6 +88,8 @@ static bool generateEnum(const Binder_Cursor &theEnum,
 
   if (anEnumSpelling.empty())
     return false;
+
+  std::cout << "Binding enum: " << anEnumSpelling << '\n';
 
   theStream << ".beginNamespace(\"" << anEnumSpelling << "\")\n";
 
@@ -78,7 +106,7 @@ static bool generateEnum(const Binder_Cursor &theEnum,
 
 static bool generateCtor(const Binder_Cursor &theClass,
                          std::ostream &theStream) {
-  if (theClass.IsAbstract())
+  if (theClass.IsAbstract() || theClass.IsStaticClass())
     return true;
 
   std::string aClassSpelling = theClass.Spelling();
@@ -94,7 +122,7 @@ static bool generateCtor(const Binder_Cursor &theClass,
   if (theClass.IsTransient()) {
     // Intrusive container is gooooooooooooooooooooooooood!
     theStream << ".addConstructorFrom<opencascade::handle<" << aClassSpelling
-              << ">, ";
+              << ">,";
   } else {
     theStream << ".addConstructor<";
   }
@@ -153,6 +181,12 @@ static std::string generateMethod(const Binder_Cursor &theClass,
   std::string aMethodSpelling = theMethod.Spelling();
   std::vector<Binder_Cursor> aParams = theMethod.Parameters();
   std::ostringstream oss{};
+
+  std::string aFuncName = aClassSpelling + "::" + aMethodSpelling;
+
+  if (Binder_Util_Contains(binder::MANUAL_METHODS, aFuncName)) {
+    return binder::MANUAL_METHODS.at(aFuncName);
+  }
 
   if (theMethod.IsOperator()) {
     oss << "+[](const " << aClassSpelling << " &theSelf";
@@ -321,9 +355,14 @@ static bool generateMethods(const Binder_Cursor &theClass,
 
   std::map<std::string, Binder_MethodGroup> aGroups{};
 
+  bool hasCopyFunc = false;
+
   // Group cxxmethods by name.
   for (const auto &aMethod : aMethods) {
     std::string aFuncSpelling = aMethod.Spelling();
+
+    if (aFuncSpelling == "Copy")
+      hasCopyFunc = true;
 
     if (aMethod.IsOperator()) {
       if (aFuncSpelling == "operator-") {
@@ -389,14 +428,22 @@ static bool generateMethods(const Binder_Cursor &theClass,
   }
 
   if (Binder_Util_Contains(binder::EXTRA_METHODS, aClassSpelling)) {
-    theStream << binder::EXTRA_METHODS.at(aClassSpelling);
+    theStream << binder::EXTRA_METHODS.at(aClassSpelling) << '\n';
   }
 
   // DownCast from Standard_Transient
-  if (theClass.IsTransient()) {
+  if (theClass.IsTransient() && aClassSpelling != "Standard_Transient") {
     theStream << ".addStaticFunction(\"DownCast\",+[](const "
                  "Handle(Standard_Transient) &h){ return Handle("
               << aClassSpelling << ")::DownCast(h); })\n";
+  }
+
+  if (!hasCopyFunc && !theClass.IsStaticClass() && !theClass.IsAbstract() &&
+      !theClass.Ctors(true).empty() && aClassSpelling != "Standard_Transient" &&
+      true /* TODO: Check copy contructor */) {
+    theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
+              << " &__theSelf__){ return " << aClassSpelling
+              << "{__theSelf__}; })\n";
   }
 
   return true;
@@ -453,13 +500,10 @@ bool Binder_Module::generate(const std::string &theExportDir) {
 
   aStream << "/* This file is generated, do not edit. */\n\n";
   aStream << "#include \"l" << myName << ".h\"\n\n";
-  aStream << "void luaocct_init_" << myName << "(lua_State *L) {\n";
-  aStream << "luabridge::getGlobalNamespace(L)\n";
-  aStream << ".beginNamespace(\"LuaOCCT\")\n";
-  aStream << ".beginNamespace(\"" << myName << "\")\n\n";
 
   // Bind enumerators.
   std::vector<Binder_Cursor> anEnums = aCursor.Enums();
+  std::ostringstream anEnumChuck{};
 
   for (const auto &anEnum : anEnums) {
     std::string anEnumSpelling = anEnum.Spelling();
@@ -470,8 +514,16 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (!myParent->AddVisitedClass(anEnumSpelling))
       continue;
 
-    generateEnum(anEnum, aStream);
+    generateEnumCast(anEnum, aStream);
+    generateEnum(anEnum, anEnumChuck);
   }
+
+  aStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
+  aStream << "luabridge::getGlobalNamespace(L)\n";
+  aStream << ".beginNamespace(\"LuaOCCT\")\n";
+  aStream << ".beginNamespace(\"" << myName << "\")\n\n";
+
+  aStream << anEnumChuck.str();
 
   // Bind classes.
   std::vector<Binder_Cursor> aClasses =

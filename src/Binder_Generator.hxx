@@ -66,7 +66,9 @@ public:
 
   bool Parse();
 
-  bool Generate(const std::string &theExportDir = ".");
+  bool Generate();
+
+  bool GenerateMain(const std::vector<std::string> &theModules);
 
   int Save(const std::string &theFilePath) const;
 
