@@ -38,7 +38,9 @@ int main(int argc, char const *argv[]) {
       "Standard",
       "GeomAbs",
       "TopAbs",
+      "Precision",
       "gp",
+      "Geom2d",
       "Geom",
       "TopoDS",
       "TopExp",
@@ -48,7 +50,8 @@ int main(int argc, char const *argv[]) {
       "BRep",
       "BRepLib",
       "Bnd",
-      "Precision",
+      "CPnts",
+      "GeomConvert",
   };
 
   /* clang-format on */

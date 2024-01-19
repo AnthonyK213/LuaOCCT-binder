@@ -495,6 +495,7 @@ static bool generateClass(const Binder_Cursor &theClass,
 bool Binder_Module::generate(const std::string &theExportDir) {
   Binder_Cursor aCursor = clang_getTranslationUnitCursor(myTransUnit);
   std::string theExportName = theExportDir + "/l" + myName;
+  std::string thePrefix = myName + "_";
 
   // The header file.
   std::ofstream aStream{theExportName + ".h"};
@@ -518,14 +519,20 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   for (const auto &anEnum : anEnums) {
     std::string anEnumSpelling = anEnum.Spelling();
 
+    if (!Binder_Util_StartsWith(anEnumSpelling, thePrefix))
+      continue;
+
     if (anEnumSpelling.empty())
       continue;
 
     if (!myParent->AddVisitedClass(anEnumSpelling))
       continue;
 
-    generateEnumCast(anEnum, aStream);
-    generateEnumValue(anEnum, anEnumChuck);
+    if (!generateEnumCast(anEnum, aStream))
+      continue;
+
+    if (!generateEnumValue(anEnum, anEnumChuck))
+      continue;
   }
 
   aStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
@@ -542,7 +549,8 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   for (const auto &aClass : aClasses) {
     std::string aClassSpelling = aClass.Spelling();
 
-    if (!Binder_Util_StartsWith(aClassSpelling, myName))
+    if (!Binder_Util_StartsWith(aClassSpelling, thePrefix) &&
+        aClassSpelling != myName)
       continue;
 
     if (Binder_Util_StartsWith(aClassSpelling, "Handle"))
@@ -563,7 +571,7 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (Binder_Util_StrContains(aClassSpelling, "List"))
       continue;
 
-    if (aClassSpelling == "Standard")
+    if (Binder_Util_Contains(binder::CLASS_BLACKLIST, aClassSpelling))
       continue;
 
     // Handle forward declaration.
