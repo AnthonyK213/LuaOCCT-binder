@@ -47,7 +47,7 @@ static const std::unordered_map<std::string, std::string> EXTRA_METHODS{
 
 static const std::unordered_map<std::string, std::string> MANUAL_METHODS{
     {"Bnd_OBB::ReBuild",
-     R"===(+[](Bnd_OBB &__theSelf__,const TColgp_Array1OfPnt &theListOfPoints,const Standard_Boolean theIsOptimal){ __theSelf__.ReBuild(theListOfPoints, nullptr, theIsOptimal); },+[](Bnd_OBB &__theSelf__,const TColgp_Array1OfPnt &theListOfPoints,const TColStd_Array1OfReal &theListOfTolerance,const Standard_Boolean theIsOptimal){ __theSelf__.ReBuild(theListOfPoints,&theListOfTolerance,theIsOptimal); })==="},
+     R"===(+[](Bnd_OBB &__theSelf__,const TColgp_Array1OfPnt &theListOfPoints,const Standard_Boolean theIsOptimal){ TColgp_Array1OfPnt thePnts{theListOfPoints.First(),0,theListOfPoints.Length()-1};__theSelf__.ReBuild(thePnts, nullptr, theIsOptimal); },+[](Bnd_OBB &__theSelf__,const TColgp_Array1OfPnt &theListOfPoints,const TColStd_Array1OfReal &theListOfTolerance,const Standard_Boolean theIsOptimal){ TColgp_Array1OfPnt thePnts{theListOfPoints.First(),0,theListOfPoints.Length()-1};TColStd_Array1OfReal theTols{theListOfTolerance.First(),0,theListOfTolerance.Length()-1};__theSelf__.ReBuild(thePnts,&theTols,theIsOptimal); })==="},
     {"Bnd_OBB::GetVertex",
      R"===(+[](const Bnd_OBB &theSelf){ std::array<gp_Pnt,8> theResult{};theSelf.GetVertex(theResult.data());return theResult; })==="},
     {
