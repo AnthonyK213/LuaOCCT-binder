@@ -46,7 +46,6 @@ bool Binder_Generator::GenerateMain(
     aStream << "#include \"l" << aMod << ".h\"\n";
   }
 
-  // aStream << "#include \"lGeomConvert.h\"\n";
   aStream << "#include \"lutil.h\"\n\n";
   aStream << "int32_t luaopen_luaocct(lua_State *L) {\n";
 
@@ -54,7 +53,6 @@ bool Binder_Generator::GenerateMain(
     aStream << "\tluaocct_init_" << aMod << "(L);\n";
   }
 
-  // aStream << "\tluaocct_init_GeomConvert(L);\n";
   aStream << "\tluaocct_init_util(L);\n";
   aStream << "\n\treturn 0;\n}\n";
 
