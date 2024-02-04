@@ -25,10 +25,24 @@ static const std::set<std::string> METHOD_BLACKLIST{
     "get_type_descriptor",
 };
 
+static const std::set<std::string> COPY_BLACKLIST{
+    "TDocStd_Document",
+    "TDF_Transaction",
+};
+
 static const std::set<std::string> IMMUTABLE_TYPE{
-    "Standard_Boolean", "Standard_CString",   "Standard_Integer",
-    "Standard_Real",    "NCollection_Array1", "NCollection_Array2",
-    "NCollection_List", "NCollection_Map",    "handle",
+    "Standard_Boolean",
+    "Standard_CString",
+    "Standard_Integer",
+    "Standard_Real",
+    "NCollection_Array1",
+    "NCollection_Array2",
+    "NCollection_List",
+    "NCollection_Map",
+    "handle",
+    "TCollection_AsciiString",
+    "TCollection_ExtendedString",
+    "TDF_Label",
 };
 
 static const std::unordered_map<std::string, std::string> EXTRA_METHODS{

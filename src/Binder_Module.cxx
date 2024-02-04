@@ -450,7 +450,8 @@ static bool generateMethods(const Binder_Cursor &theClass,
 
   if (!hasCopyFunc && !theClass.IsStaticClass() && !theClass.IsAbstract() &&
       !theClass.Ctors(true).empty() && aClassSpelling != "Standard_Transient" &&
-      true /* TODO: Check copy contructor */) {
+      true /* TODO: Check copy contructor */ &&
+      !Binder_Util_Contains(binder::COPY_BLACKLIST, aClassSpelling)) {
     theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
               << " &__theSelf__){ return " << aClassSpelling
               << "{__theSelf__}; })\n";
@@ -559,8 +560,8 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (Binder_Util_StartsWith(aClassSpelling, "NCollection"))
       continue;
 
-    if (Binder_Util_StartsWith(aClassSpelling, "TCol"))
-      continue;
+    // if (Binder_Util_StartsWith(aClassSpelling, "TCol"))
+    //   continue;
 
     if (Binder_Util_StrContains(aClassSpelling, "Sequence"))
       continue;
