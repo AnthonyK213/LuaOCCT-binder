@@ -69,6 +69,10 @@ bool Binder_Cursor::IsImmutable() const {
   return false;
 }
 
+bool Binder_Cursor::IsInlined() const {
+  return clang_Cursor_isFunctionInlined(myCursor);
+}
+
 bool Binder_Cursor::NeedsInOutMethod() const {
   for (auto &p : Parameters()) {
     Binder_Type aType = p.Type();
@@ -218,10 +222,19 @@ std::string Binder_Cursor::Docs() const {
 }
 
 bool Binder_Cursor::IsStaticClass() const {
-  for (const auto &aMethod : Methods()) {
-    if (aMethod.IsPublic() && !aMethod.IsStaticMethod())
+  int nbStatic = 0;
+
+  for (const auto &aMethod : GetChildrenOfKind(CXCursor_CXXMethod, true)) {
+    // Operators is static, too...
+    if (Binder_Util_StartsWith(aMethod.Spelling(), "operator"))
+      continue;
+
+    if (aMethod.IsStaticMethod()) {
+      nbStatic++;
+    } else {
       return false;
+    }
   }
 
-  return true;
+  return (nbStatic > 0);
 }

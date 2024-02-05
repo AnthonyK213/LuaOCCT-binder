@@ -116,8 +116,11 @@ static bool generateEnumValue(const Binder_Cursor &theEnum,
 
 static bool generateCtor(const Binder_Cursor &theClass,
                          std::ostream &theStream) {
-  if (theClass.IsAbstract() || theClass.IsStaticClass())
+  if (theClass.IsAbstract() || theClass.IsStaticClass()) {
+    std::cout << "Skip ctor: " << theClass.Spelling()
+              << " isStatic:" << theClass.IsStaticClass() << '\n';
     return true;
+  }
 
   std::string aClassSpelling = theClass.Spelling();
   bool needsDefaultCtor = theClass.NeedsDefaultCtor();
@@ -219,7 +222,9 @@ static std::string generateMethod(const Binder_Cursor &theClass,
     return oss.str();
   }
 
-  if (theMethod.NeedsInOutMethod()) {
+  if (theMethod.NeedsInOutMethod() /* ||
+      Binder_Util_Contains(binder::DAMN_INLINED,
+                           aClassSpelling + "::" + aMethodSpelling ) */) {
     std::vector<Binder_Cursor> anIn{};
     std::vector<Binder_Cursor> anOut{};
     theMethod.GetInOutParams(anIn, anOut);
@@ -245,7 +250,8 @@ static std::string generateMethod(const Binder_Cursor &theClass,
     Binder_Type aRetType = theMethod.ReturnType();
     std::string aRetTypeSpelling = aRetType.Spelling();
     bool anHasRetVal = aRetTypeSpelling != "void";
-    bool anTupleOut = anHasRetVal || anOut.size() > 1;
+    int nbReturn = (int)anHasRetVal + anOut.size();
+    bool anTupleOut = nbReturn >= 2;
 
     if (anTupleOut) {
       oss << ")->std::tuple<";
@@ -259,8 +265,13 @@ static std::string generateMethod(const Binder_Cursor &theClass,
                    return theParam.Type().GetPointee().Spelling();
                  })
           << "> { ";
+    } else if (nbReturn == 1) {
+      if (anOut.empty())
+        oss << ") { ";
+      else
+        oss << ")->" << anOut[0].Type().GetPointee().Spelling() << " { ";
     } else {
-      oss << ")->" << anOut[0].Type().GetPointee().Spelling() << " { ";
+      oss << ") { ";
     }
 
     for (const auto &anOutParam : anOut) {
@@ -302,8 +313,13 @@ static std::string generateMethod(const Binder_Cursor &theClass,
                    return theParam.Spelling();
                  })
           << "}; }";
+    } else if (nbReturn == 1) {
+      if (anOut.empty())
+        oss << "return __theRet__; }";
+      else
+        oss << "return " << anOut[0].Spelling() << "; }";
     } else {
-      oss << "return " << anOut[0].Spelling() << "; }";
+      oss << " }";
     }
 
     return oss.str();
@@ -370,6 +386,10 @@ static bool generateMethods(const Binder_Cursor &theClass,
   // Group cxxmethods by name.
   for (const auto &aMethod : aMethods) {
     std::string aFuncSpelling = aMethod.Spelling();
+
+    std::string aFuncName = aClassSpelling + "::" + aFuncSpelling;
+    if (Binder_Util_Contains(binder::METHOD_BLACKLIST_ABS, aFuncName))
+      continue;
 
     if (aFuncSpelling == "Copy")
       hasCopyFunc = true;
@@ -449,9 +469,8 @@ static bool generateMethods(const Binder_Cursor &theClass,
   }
 
   if (!hasCopyFunc && !theClass.IsStaticClass() && !theClass.IsAbstract() &&
-      !theClass.Ctors(true).empty() && aClassSpelling != "Standard_Transient" &&
-      true /* TODO: Check copy contructor */ &&
-      !Binder_Util_Contains(binder::COPY_BLACKLIST, aClassSpelling)) {
+      !theClass.Ctors(true).empty() && true /* TODO: Check copy contructor */ &&
+      Binder_Util_StartsWith(aClassSpelling, "gp")) {
     theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
               << " &__theSelf__){ return " << aClassSpelling
               << "{__theSelf__}; })\n";

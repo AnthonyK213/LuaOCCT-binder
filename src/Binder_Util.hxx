@@ -12,7 +12,6 @@ std::string Binder_Util_GetCString(CXString &&theStr);
 
 inline bool Binder_Util_StartsWith(const std::string &theStr,
                                    const std::string &thePrefix) {
-
   return theStr.rfind(thePrefix, 0) == 0;
 }
 

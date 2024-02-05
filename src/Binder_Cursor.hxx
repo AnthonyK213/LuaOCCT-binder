@@ -144,6 +144,8 @@ public:
 
   bool IsImmutable() const;
 
+  bool IsInlined() const;
+
   Binder_Cursor Parent() const {
     return clang_getCursorSemanticParent(myCursor);
   }
