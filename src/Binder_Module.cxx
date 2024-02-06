@@ -479,6 +479,37 @@ static bool generateMethods(const Binder_Cursor &theClass,
   return true;
 }
 
+static bool generateFields(const Binder_Cursor &theStruct,
+                           std::ostream &theStream) {
+  std::string aStructSpelling = theStruct.Spelling();
+  std::vector<Binder_Cursor> aFields =
+      theStruct.GetChildrenOfKind(CXCursor_FieldDecl, true);
+
+  for (const auto &aField : aFields) {
+    std::string aFieldSpelling = aField.Spelling();
+    theStream << ".addProperty(\"" << aFieldSpelling << "\",&"
+              << aStructSpelling << "::" << aFieldSpelling << ")\n";
+  }
+
+  return true;
+}
+
+static bool generateStruct(const Binder_Cursor &theStruct,
+                           std::ostream &theStream,
+                           const Binder_Generator *theParent) {
+  std::string aStructSpelling = theStruct.Spelling();
+  std::cout << "Binding struct: " << aStructSpelling << '\n';
+
+  theStream << ".beginClass<" << aStructSpelling << ">(\"" << aStructSpelling
+            << "\")\n";
+  generateCtor(theStruct, theStream);
+  generateFields(theStruct, theStream);
+  generateMethods(theStruct, theStream);
+  theStream << ".endClass()\n\n";
+
+  return true;
+}
+
 static bool generateClass(const Binder_Cursor &theClass,
                           std::ostream &theStream,
                           const Binder_Generator *theParent) {
@@ -562,6 +593,20 @@ bool Binder_Module::generate(const std::string &theExportDir) {
 
   aStream << anEnumChuck.str();
 
+  // Bind structs.
+  std::vector<Binder_Cursor> aStructs =
+      aCursor.GetChildrenOfKind(CXCursor_StructDecl);
+
+  for (const auto &aStruct : aStructs) {
+    std::string aStructSpelling = aStruct.Spelling();
+
+    if (!Binder_Util_StartsWith(aStructSpelling, thePrefix) &&
+        aStructSpelling != myName)
+      continue;
+
+    generateStruct(aStruct, aStream, myParent);
+  }
+
   // Bind classes.
   std::vector<Binder_Cursor> aClasses =
       aCursor.GetChildrenOfKind(CXCursor_ClassDecl);
@@ -573,11 +618,11 @@ bool Binder_Module::generate(const std::string &theExportDir) {
         aClassSpelling != myName)
       continue;
 
-    if (Binder_Util_StartsWith(aClassSpelling, "Handle"))
-      continue;
+    // if (Binder_Util_StartsWith(aClassSpelling, "Handle"))
+    //   continue;
 
-    if (Binder_Util_StartsWith(aClassSpelling, "NCollection"))
-      continue;
+    // if (Binder_Util_StartsWith(aClassSpelling, "NCollection"))
+    //   continue;
 
     // if (Binder_Util_StartsWith(aClassSpelling, "TCol"))
     //   continue;

@@ -58,6 +58,7 @@ int main(int argc, char const *argv[]) {
       "Bnd",
       "CPnts",
       "GeomConvert",
+      "IMeshTools",
       // "TDocStd",
       // "TDF",
       // "XCAFPrs",

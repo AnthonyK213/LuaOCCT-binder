@@ -236,5 +236,8 @@ bool Binder_Cursor::IsStaticClass() const {
     }
   }
 
-  return (nbStatic > 0);
+  if (nbStatic == 0)
+    return false;
+
+  return GetChildrenOfKind(CXCursor_FieldDecl, true).empty();
 }
