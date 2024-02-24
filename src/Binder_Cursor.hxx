@@ -167,6 +167,8 @@ public:
   bool HasPublicDtor() const {
     return !GetChildrenOfKind(CXCursor_Destructor, true).empty();
   }
+  
+  bool IsCopyable() const;
 
   std::vector<Binder_Cursor> Enums() const {
     return GetChildrenOfKind(CXCursor_EnumDecl);

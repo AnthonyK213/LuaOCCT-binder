@@ -241,3 +241,34 @@ bool Binder_Cursor::IsStaticClass() const {
 
   return GetChildrenOfKind(CXCursor_FieldDecl, true).empty();
 }
+
+bool Binder_Cursor::IsCopyable() const {
+  if (IsStaticClass() || IsAbstract())
+    return false;
+
+  // if (Binder_Util_StartsWith(Spelling(), "gp"))
+  //   return true;
+
+  /// WORKAROUND: Libclang makes some mistakes on determine if a class is
+  /// abstract?
+  if (Binder_Util_Contains(binder::COPYABLE_BLACKLIST, Spelling()))
+    return false;
+
+  for (const auto &aDtor : Dtors()) {
+    if (!aDtor.IsPublic())
+      return false;
+  }
+
+  std::vector<Binder_Cursor> aCtors = Ctors();
+  bool hasMoveCtor = false;
+
+  for (const auto &aCtor : aCtors) {
+    if (aCtor.IsCopyCtor() && aCtor.IsPublic())
+      return true;
+
+    if (aCtor.IsMoveCtor())
+      hasMoveCtor = true;
+  }
+
+  return !hasMoveCtor;
+}

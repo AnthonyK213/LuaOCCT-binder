@@ -468,9 +468,7 @@ static bool generateMethods(const Binder_Cursor &theClass,
               << aClassSpelling << ")::DownCast(h); })\n";
   }
 
-  if (!hasCopyFunc && !theClass.IsStaticClass() && !theClass.IsAbstract() &&
-      !theClass.Ctors(true).empty() && true /* TODO: Check copy contructor */ &&
-      Binder_Util_StartsWith(aClassSpelling, "gp")) {
+  if (!hasCopyFunc && theClass.IsCopyable()) {
     theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
               << " &__theSelf__){ return " << aClassSpelling
               << "{__theSelf__}; })\n";

@@ -26,6 +26,10 @@ static const std::set<std::string> METHOD_BLACKLIST{
     "get_type_descriptor",
 };
 
+static const std::set<std::string> COPYABLE_BLACKLIST{
+    "Geom_SweptSurface",
+};
+
 static const std::set<std::string> METHOD_BLACKLIST_ABS{
     "Standard_GUID::ToCString",      "Standard_GUID::ToExtString",
     "Standard_GUID::ShallowDump",    "IntTools_PntOnFace::IsValid",
@@ -61,7 +65,9 @@ static const std::unordered_map<std::string, std::string> EXTRA_METHODS{
      R"===(.addFunction("__tostring",+[](const gp_Quaternion &theSelf){ std::ostringstream oss{};oss << "gp_Quaternion{" << theSelf.X() << ',' << theSelf.Y() << ',' << theSelf.Z() << ',' << theSelf.W() << '}';return oss.str(); }))==="},
     {
         "Standard_GUID",
-        // R"===(.addFunction("__tostring",+[](const Standard_GUID &theSelf) -> std::string { std::string s{36,' '};theSelf.ToCString(s.data());return s; }))===",
+        // R"===(.addFunction("__tostring",+[](const Standard_GUID &theSelf) ->
+        // std::string { std::string s{36,'
+        // '};theSelf.ToCString(s.data());return s; }))===",
         R"===(.addFunction("__tostring",+[](const Standard_GUID &theSelf) -> std::string { char s[37];theSelf.ToCString(s);return s; }))===",
     },
 };
