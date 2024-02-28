@@ -74,6 +74,8 @@ public:
 
   bool Load(const std::string &theFilePath);
 
+  bool IsValid() const;
+
 private:
   std::string myModDir{};
   std::string myOcctIncDir{};

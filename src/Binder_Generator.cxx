@@ -2,6 +2,7 @@
 #include "Binder_Module.hxx"
 #include "Binder_Util.hxx"
 
+#include <filesystem>
 #include <fstream>
 
 Binder_Generator::Binder_Generator() : myCurMod(nullptr), myExportDir(".") {}
@@ -63,4 +64,14 @@ bool Binder_Generator::GenerateMain(
 
 bool Binder_Generator::IsClassVisited(const std::string &theClass) const {
   return Binder_Util_Contains(myVisitedClasses, theClass);
+}
+
+bool Binder_Generator::IsValid() const {
+  if (!std::filesystem::is_directory(myModDir))
+    return false;
+
+  if (!std::filesystem::is_directory(myOcctIncDir))
+    return false;
+
+  return true;
 }

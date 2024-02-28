@@ -23,7 +23,7 @@ bool Binder_Module::parse() {
 
   myIndex = clang_createIndex(0, 0);
 
-  std::string aHeader = myParent->ModDir() + "/_" + myName + ".h";
+  std::string aHeader = myParent->ModDir() + "/" + myName + ".h";
 
   std::vector<const char *> aClangArgs{};
   std::transform(

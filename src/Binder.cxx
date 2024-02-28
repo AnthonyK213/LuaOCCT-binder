@@ -1,5 +1,6 @@
 #include "Binder_Generator.hxx"
 
+#include <filesystem>
 #include <sstream>
 
 /// arg[1]: OpenCASCADE include directory;
@@ -25,15 +26,30 @@ int main(int argc, char const *argv[]) {
   // "-fvisibility=hidden",
   //                                        "-fvisibility-inlines-hidden"};
 
-  aGenerator.SetModDir(argv[2])
+  std::string modDir = argv[2];
+
+  aGenerator.SetModDir(modDir)
       .SetOcctIncDir(argv[1])
       .SetClangArgs({"-x", "c++", "-std=c++17", "-D__CODE_GENERATOR__",
                      "-Wno-deprecated-declarations", "-ferror-limit=0",
                      "-DCSFDB", "-DHAVE_CONFIG_H"})
       .SetExportDir(argv[3]);
 
+  if (!aGenerator.IsValid()) {
+    std::cerr << "Generator is invalid\n";
+    return -1;
+  }
+
+  // std::vector<std::string> aMods{};
+
+  // for (auto &entry : std::filesystem::directory_iterator(modDir)) {
+  //   std::string name = entry.path().stem().string();
+  //   aMods.push_back(name);
+  // }
+
   /* clang-format off */
 
+  /// NOTE: Keep the order correct!!
   std::vector<std::string> aMods = {
       "Standard",
       "GeomAbs",
@@ -59,6 +75,8 @@ int main(int argc, char const *argv[]) {
       "CPnts",
       "GeomConvert",
       "IMeshTools",
+      "BRepGProp",
+      "GProp",
       // "TDocStd",
       // "TDF",
       // "XCAFPrs",
