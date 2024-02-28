@@ -3,9 +3,14 @@
 #include <filesystem>
 #include <sstream>
 
+#include "Binder_Config.hxx"
+
+Binder_Config binder_config;
+
 /// arg[1]: OpenCASCADE include directory;
 /// arg[2]: Module header directory;
 /// arg[3]: Export directory;
+/// arg[4]: Configuration file;
 int main(int argc, char const *argv[]) {
   if (argc < 5) {
     std::cerr << "Args?\n";
@@ -33,13 +38,14 @@ int main(int argc, char const *argv[]) {
       .SetClangArgs({"-x", "c++", "-std=c++17", "-D__CODE_GENERATOR__",
                      "-Wno-deprecated-declarations", "-ferror-limit=0",
                      "-DCSFDB", "-DHAVE_CONFIG_H"})
-      .SetExportDir(argv[3])
-      .SetConfigFile(argv[4]);
+      .SetExportDir(argv[3]);
 
   if (!aGenerator.IsValid()) {
     std::cerr << "Generator is invalid\n";
     return -1;
   }
+
+  binder_config.Init(argv[4]);
 
   // std::vector<std::string> aMods{};
 
@@ -51,41 +57,41 @@ int main(int argc, char const *argv[]) {
   /* clang-format off */
 
   /// NOTE: Keep the order correct!!
-  std::vector<std::string> aMods = {
-      "Standard",
-      "GeomAbs",
-      "TopAbs",
-      "Precision",
-      // "TCollection",
-      "gp",
-      "Geom2d",
-      "Geom",
-      "TopoDS",
-      "TopExp",
-      "TopLoc",
-      "Poly",
-      "Message",
-      "BRepBuilderAPI",
-      "IntTools",
-      "BOPDS",
-      "BOPAlgo",
-      "BRepAlgoAPI",
-      "BRep",
-      "BRepLib",
-      "Bnd",
-      "CPnts",
-      "GeomConvert",
-      "IMeshTools",
-      "BRepGProp",
-      "GProp",
-      // "TDocStd",
-      // "TDF",
-      // "XCAFPrs",
-  };
+  // std::vector<std::string> aMods = {
+  //     "Standard",
+  //     "GeomAbs",
+  //     "TopAbs",
+  //     "Precision",
+  //     // "TCollection",
+  //     "gp",
+  //     "Geom2d",
+  //     "Geom",
+  //     "TopoDS",
+  //     "TopExp",
+  //     "TopLoc",
+  //     "Poly",
+  //     "Message",
+  //     "BRepBuilderAPI",
+  //     "IntTools",
+  //     "BOPDS",
+  //     "BOPAlgo",
+  //     "BRepAlgoAPI",
+  //     "BRep",
+  //     "BRepLib",
+  //     "Bnd",
+  //     "CPnts",
+  //     "GeomConvert",
+  //     "IMeshTools",
+  //     "BRepGProp",
+  //     "GProp",
+  //     // "TDocStd",
+  //     // "TDF",
+  //     // "XCAFPrs",
+  // };
 
   /* clang-format on */
 
-  for (const std::string &aModName : aMods) {
+  for (const std::string &aModName : binder_config.myModules) {
     auto aMod = std::make_shared<Binder_Module>(aModName, aGenerator);
     aGenerator.SetModule(aMod);
 
@@ -98,7 +104,7 @@ int main(int argc, char const *argv[]) {
     }
   }
 
-  aGenerator.GenerateMain(aMods);
+  aGenerator.GenerateMain(binder_config.myModules);
 
   return 0;
 }

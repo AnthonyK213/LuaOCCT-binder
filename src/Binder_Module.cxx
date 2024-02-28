@@ -1,5 +1,4 @@
 #include "Binder_Module.hxx"
-#include "Binder_Common.hxx"
 #include "Binder_Generator.hxx"
 #include "Binder_Util.hxx"
 
@@ -10,6 +9,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+extern Binder_Config binder_config;
 
 Binder_Module::Binder_Module(const std::string &theName,
                              Binder_Generator &theParent)
@@ -181,7 +182,8 @@ static bool isIgnoredMethod(const Binder_Cursor &theMethod) {
     return true;
 
   // Any one uses these methods?
-  if (Binder_Util_Contains(binder::METHOD_BLACKLIST, aFuncSpelling))
+  if (Binder_Util_Contains(binder_config.myBlackListMethodByName,
+                           aFuncSpelling))
     return true;
 
   return false;
@@ -197,8 +199,8 @@ static std::string generateMethod(const Binder_Cursor &theClass,
 
   std::string aFuncName = aClassSpelling + "::" + aMethodSpelling;
 
-  if (Binder_Util_Contains(binder::MANUAL_METHODS, aFuncName)) {
-    return binder::MANUAL_METHODS.at(aFuncName);
+  if (Binder_Util_Contains(binder_config.myManualMethod, aFuncName)) {
+    return binder_config.myManualMethod.at(aFuncName);
   }
 
   if (theMethod.IsOperator()) {
@@ -388,7 +390,7 @@ static bool generateMethods(const Binder_Cursor &theClass,
     std::string aFuncSpelling = aMethod.Spelling();
 
     std::string aFuncName = aClassSpelling + "::" + aFuncSpelling;
-    if (Binder_Util_Contains(binder::METHOD_BLACKLIST_ABS, aFuncName))
+    if (Binder_Util_Contains(binder_config.myBlackListMethod, aFuncName))
       continue;
 
     if (aFuncSpelling == "Copy")
@@ -402,7 +404,7 @@ static bool generateMethods(const Binder_Cursor &theClass,
           aFuncSpelling = "__sub";
         }
       } else {
-        aFuncSpelling = binder::LUA_OPERATORS.at(aFuncSpelling);
+        aFuncSpelling = binder_config.myLuaOperators.at(aFuncSpelling);
       }
     }
 
@@ -457,8 +459,8 @@ static bool generateMethods(const Binder_Cursor &theClass,
     }
   }
 
-  if (Binder_Util_Contains(binder::EXTRA_METHODS, aClassSpelling)) {
-    theStream << binder::EXTRA_METHODS.at(aClassSpelling) << '\n';
+  if (Binder_Util_Contains(binder_config.myExtraMethod, aClassSpelling)) {
+    theStream << binder_config.myExtraMethod.at(aClassSpelling) << '\n';
   }
 
   // DownCast from Standard_Transient
@@ -634,7 +636,7 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (Binder_Util_StrContains(aClassSpelling, "List"))
       continue;
 
-    if (Binder_Util_Contains(binder::CLASS_BLACKLIST, aClassSpelling))
+    if (Binder_Util_Contains(binder_config.myBlackListClass, aClassSpelling))
       continue;
 
     // Handle forward declaration.

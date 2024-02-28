@@ -1,11 +1,13 @@
 #include "Binder_Cursor.hxx"
-#include "Binder_Common.hxx"
+#include "Binder_Config.hxx"
 #include "Binder_Util.hxx"
 
 #include <algorithm>
 #include <iostream>
 #include <map>
 #include <set>
+
+extern Binder_Config binder_config;
 
 Binder_Cursor::Binder_Cursor(const CXCursor &theCursor) : myCursor(theCursor) {}
 
@@ -31,7 +33,7 @@ bool Binder_Cursor::IsTransient() const {
 
 bool Binder_Cursor::IsOperator() const {
   if (IsFunction() || IsCxxMethod()) {
-    return Binder_Util_Contains(binder::LUA_OPERATORS, Spelling());
+    return Binder_Util_Contains(binder_config.myLuaOperators, Spelling());
   }
 
   return false;
@@ -59,9 +61,9 @@ bool Binder_Cursor::IsImmutable() const {
   Binder_Type originType =
       clang_getTypedefDeclUnderlyingType(aType.GetDeclaration());
 
-  if (Binder_Util_Contains(binder::IMMUTABLE_TYPE,
+  if (Binder_Util_Contains(binder_config.myImmutableType,
                            aType.GetDeclaration().Spelling()) ||
-      Binder_Util_Contains(binder::IMMUTABLE_TYPE,
+      Binder_Util_Contains(binder_config.myImmutableType,
                            originType.GetDeclaration().Spelling()) ||
       aType.GetDeclaration().IsEnum())
     return true;
@@ -251,7 +253,7 @@ bool Binder_Cursor::IsCopyable() const {
 
   /// WORKAROUND: Libclang makes some mistakes on determine if a class is
   /// abstract?
-  if (Binder_Util_Contains(binder::COPYABLE_BLACKLIST, Spelling()))
+  if (Binder_Util_Contains(binder_config.myBlackListCopyable, Spelling()))
     return false;
 
   for (const auto &aDtor : Dtors()) {

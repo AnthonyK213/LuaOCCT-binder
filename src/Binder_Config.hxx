@@ -5,6 +5,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <vector>
 
 class Binder_Config {
 public:
@@ -17,15 +18,19 @@ public:
 private:
   bool load();
 
+  static bool loadStringVec(const toml::v3::node_view<toml::v3::node> &theNode,
+                            std::vector<std::string> &theStringVec);
+
   static bool loadStringSet(const toml::v3::node_view<toml::v3::node> &theNode,
-                            std::set<std::string> theStringSet);
+                            std::set<std::string> &theStringSet);
 
   static bool
   loadStringMap(const toml::v3::node_view<toml::v3::node> &theNode,
-                std::unordered_map<std::string, std::string> theStringMap);
+                std::unordered_map<std::string, std::string> &theStringMap);
 
-private:
+public:
   toml::v3::ex::parse_result myToml;
+  std::vector<std::string> myModules{};
   std::set<std::string> myImmutableType{};
   std::unordered_map<std::string, std::string> myLuaOperators{};
   std::set<std::string> myBlackListClass{};

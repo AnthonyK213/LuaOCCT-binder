@@ -11,9 +11,30 @@ bool Binder_Config::Init(const std::string &theFile) {
   return load();
 }
 
+bool Binder_Config::loadStringVec(
+    const toml::v3::node_view<toml::v3::node> &theNode,
+    std::vector<std::string> &theStringVec) {
+  if (toml::array *arr = theNode.as_array()) {
+    theStringVec.clear();
+
+    for (auto it = arr->cbegin(); it != arr->cend(); ++it) {
+      if (it->is_string()) {
+        std::optional<std::string> v =
+            it->as_string()->value_exact<std::string>();
+        if (v.has_value())
+          theStringVec.push_back(v.value());
+      }
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 bool Binder_Config::loadStringSet(
     const toml::v3::node_view<toml::v3::node> &theNode,
-    std::set<std::string> theStringSet) {
+    std::set<std::string> &theStringSet) {
   if (toml::array *arr = theNode.as_array()) {
     theStringSet.clear();
 
@@ -34,7 +55,7 @@ bool Binder_Config::loadStringSet(
 
 bool Binder_Config::loadStringMap(
     const toml::v3::node_view<toml::v3::node> &theNode,
-    std::unordered_map<std::string, std::string> theStringMap) {
+    std::unordered_map<std::string, std::string> &theStringMap) {
   if (toml::table *arr = theNode.as_table()) {
     theStringMap.clear();
 
@@ -55,6 +76,9 @@ bool Binder_Config::loadStringMap(
 }
 
 bool Binder_Config::load() {
+  if (!loadStringVec(myToml["modules"], myModules))
+    return false;
+
   if (!loadStringSet(myToml["immutable_type"], myImmutableType))
     return false;
 

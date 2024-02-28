@@ -40,14 +40,6 @@ public:
     return *this;
   }
 
-  const std::string &ConfigFile() const { return myConfigFile; }
-
-  Binder_Generator &SetConfigFile(const std::string &theConfigFile) {
-    myConfigFile = theConfigFile;
-    myConfig.Init(myConfigFile);
-    return *this;
-  }
-
   const std::vector<std::string> &IncludeDirs() const { return myIncludeDirs; }
 
   Binder_Generator &
@@ -89,12 +81,10 @@ private:
   std::string myModDir{};
   std::string myOcctIncDir{};
   std::string myExportDir{};
-  std::string myConfigFile{};
   std::vector<std::string> myIncludeDirs{};
   std::vector<std::string> myClangArgs{};
   std::shared_ptr<Binder_Module> myCurMod;
   std::set<std::string> myVisitedClasses{};
-  Binder_Config myConfig{};
 };
 
 #endif
