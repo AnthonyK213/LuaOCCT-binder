@@ -3,6 +3,7 @@
 
 #include <clang-c/Index.h>
 
+#include "Binder_Config.hxx"
 #include "Binder_Cursor.hxx"
 #include "Binder_Module.hxx"
 
@@ -36,6 +37,14 @@ public:
 
   Binder_Generator &SetExportDir(const std::string &theExportDir) {
     myExportDir = theExportDir;
+    return *this;
+  }
+
+  const std::string &ConfigFile() const { return myConfigFile; }
+
+  Binder_Generator &SetConfigFile(const std::string &theConfigFile) {
+    myConfigFile = theConfigFile;
+    myConfig.Init(myConfigFile);
     return *this;
   }
 
@@ -80,12 +89,12 @@ private:
   std::string myModDir{};
   std::string myOcctIncDir{};
   std::string myExportDir{};
+  std::string myConfigFile{};
   std::vector<std::string> myIncludeDirs{};
   std::vector<std::string> myClangArgs{};
-
   std::shared_ptr<Binder_Module> myCurMod;
-
   std::set<std::string> myVisitedClasses{};
+  Binder_Config myConfig{};
 };
 
 #endif

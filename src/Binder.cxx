@@ -7,7 +7,7 @@
 /// arg[2]: Module header directory;
 /// arg[3]: Export directory;
 int main(int argc, char const *argv[]) {
-  if (argc < 4) {
+  if (argc < 5) {
     std::cerr << "Args?\n";
     return 1;
   }
@@ -33,7 +33,8 @@ int main(int argc, char const *argv[]) {
       .SetClangArgs({"-x", "c++", "-std=c++17", "-D__CODE_GENERATOR__",
                      "-Wno-deprecated-declarations", "-ferror-limit=0",
                      "-DCSFDB", "-DHAVE_CONFIG_H"})
-      .SetExportDir(argv[3]);
+      .SetExportDir(argv[3])
+      .SetConfigFile(argv[4]);
 
   if (!aGenerator.IsValid()) {
     std::cerr << "Generator is invalid\n";
