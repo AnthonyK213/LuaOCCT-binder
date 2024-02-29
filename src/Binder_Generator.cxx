@@ -34,6 +34,27 @@ bool Binder_Generator::Load(const std::string &theFilePath) {
 
 #undef MOD_CALL
 
+bool Binder_Generator::GenerateEnumsBegin() {
+  std::string thePath = myExportDir + "/lenums.h";
+
+  std::ofstream aStream{thePath};
+  aStream << "/* This file is generated, do not edit. */\n\n";
+  aStream << "#ifndef _LuaOCCT_lenum_HeaderFile\n#define "
+             "_LuaOCCT_lenum_HeaderFile\n\n";
+  aStream << "#include \"lbind.h\"\n\n";
+
+  return true;
+}
+
+bool Binder_Generator::GenerateEnumsEnd() {
+  std::string thePath = myExportDir + "/lenums.h";
+
+  std::ofstream aStream{thePath, std::ios::app};
+  aStream << "\n#endif\n";
+
+  return true;
+}
+
 bool Binder_Generator::GenerateMain(
     const std::vector<std::string> &theModules) {
   std::string thePath = myExportDir + "/luaocct.cpp";

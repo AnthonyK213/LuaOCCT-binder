@@ -91,6 +91,8 @@ int main(int argc, char const *argv[]) {
 
   /* clang-format on */
 
+  aGenerator.GenerateEnumsBegin();
+
   for (const std::string &aModName : binder_config.myModules) {
     auto aMod = std::make_shared<Binder_Module>(aModName, aGenerator);
     aGenerator.SetModule(aMod);
@@ -104,6 +106,7 @@ int main(int argc, char const *argv[]) {
     }
   }
 
+  aGenerator.GenerateEnumsEnd();
   aGenerator.GenerateMain(binder_config.myModules);
 
   return 0;

@@ -553,9 +553,12 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   std::string aGuard = "_LuaOCCT_l" + myName + "_HeaderFile";
   aStream << "/* This file is generated, do not edit. */\n\n";
   aStream << "#ifndef " << aGuard << "\n#define " << aGuard << "\n\n";
-  aStream << "#include \"lbind.h\"\n\n";
+  aStream << "#include \"lenums.h\"\n\n";
   aStream << "void luaocct_init_" << myName << "(lua_State *L);\n\n";
   aStream << "#endif\n";
+
+  // Enum header file.
+  std::ofstream anEnumStream(theExportDir + "/lenums.h", std::ios::app);
 
   // The source file.
   aStream = std::ofstream(theExportName + ".cpp");
@@ -579,7 +582,7 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (!myParent->AddVisitedClass(anEnumSpelling))
       continue;
 
-    if (!generateEnumCast(anEnum, aStream))
+    if (!generateEnumCast(anEnum, anEnumStream))
       continue;
 
     if (!generateEnumValue(anEnum, anEnumChuck))

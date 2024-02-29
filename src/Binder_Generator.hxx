@@ -69,6 +69,10 @@ public:
 
   bool Generate();
 
+  bool GenerateEnumsBegin();
+
+  bool GenerateEnumsEnd();
+
   bool GenerateMain(const std::vector<std::string> &theModules);
 
   int Save(const std::string &theFilePath) const;
