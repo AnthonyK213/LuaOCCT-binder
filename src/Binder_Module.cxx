@@ -141,11 +141,17 @@ static bool generateCtor(const Binder_Cursor &theClass,
     theStream << ".addConstructor<";
   }
 
+  bool declCopyCtor = false;
+
   if (needsDefaultCtor) {
     theStream << "void()";
   } else {
     theStream << Binder_Util_Join(
-        aCtors.cbegin(), aCtors.cend(), +[](const Binder_Cursor &theCtor) {
+        aCtors.cbegin(), aCtors.cend(),
+        [&declCopyCtor](const Binder_Cursor &theCtor) {
+          if (theCtor.IsCopyCtor())
+            declCopyCtor = true;
+
           std::ostringstream oss{};
           oss << "void(";
           std::vector<Binder_Cursor> aParams = theCtor.Parameters();
@@ -157,6 +163,10 @@ static bool generateCtor(const Binder_Cursor &theClass,
               << ')';
           return oss.str();
         });
+  }
+
+  if (!declCopyCtor && theClass.IsCopyable()) {
+    theStream << ",void(const " << aClassSpelling << "&)";
   }
 
   theStream << ">()\n";
@@ -470,11 +480,11 @@ static bool generateMethods(const Binder_Cursor &theClass,
               << aClassSpelling << ")::DownCast(h); })\n";
   }
 
-  if (!hasCopyFunc && theClass.IsCopyable()) {
-    theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
-              << " &__theSelf__){ return " << aClassSpelling
-              << "{__theSelf__}; })\n";
-  }
+  // if (!hasCopyFunc && theClass.IsCopyable()) {
+  //   theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
+  //             << " &__theSelf__){ return " << aClassSpelling
+  //             << "{__theSelf__}; })\n";
+  // }
 
   return true;
 }
