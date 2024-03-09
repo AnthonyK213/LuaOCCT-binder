@@ -526,7 +526,7 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
     const Binder_MethodGroup &aMethodGroup = anIter->second;
     const std::vector<Binder_Cursor> aMtd = aMethodGroup.Methods();
     const std::vector<Binder_Cursor> aMtdSt = aMethodGroup.StaticMethods();
-    const std::string aMethodMeta = "LuaOCCT." + aClassSpelling;
+    const std::string aMethodMeta = "LuaOCCT." + myName + "." + aClassSpelling;
     const std::string &aMethodSpelling = anIter->first;
 
     if (!aMtd.empty()) {
