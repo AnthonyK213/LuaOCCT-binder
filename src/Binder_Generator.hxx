@@ -7,6 +7,7 @@
 #include "Binder_Cursor.hxx"
 #include "Binder_Module.hxx"
 
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <set>
@@ -37,6 +38,8 @@ public:
 
   Binder_Generator &SetExportDir(const std::string &theExportDir) {
     myExportDir = theExportDir;
+    std::filesystem::create_directories(theExportDir);
+    std::filesystem::create_directories(theExportDir + "/_meta");
     return *this;
   }
 

@@ -3,7 +3,6 @@
 #include "Binder_Util.hxx"
 
 #include <algorithm>
-#include <fstream>
 #include <iterator>
 #include <map>
 #include <sstream>
@@ -15,11 +14,14 @@ extern Binder_Config binder_config;
 Binder_Module::Binder_Module(const std::string &theName,
                              Binder_Generator &theParent)
     : myName(theName), myParent(&theParent), myIndex(nullptr),
-      myTransUnit(nullptr) {}
+      myTransUnit(nullptr) {
+  myExportDir = myParent->ExportDir();
+  myMetaExportDir = myParent->ExportDir() + "/_meta/";
+}
 
 Binder_Module::~Binder_Module() { dispose(); }
 
-bool Binder_Module::parse() {
+bool Binder_Module::Parse() {
   dispose();
 
   myIndex = clang_createIndex(0, 0);
@@ -70,8 +72,7 @@ static bool generateEnum(const Binder_Cursor &theEnum,
   return true;
 }
 
-static bool generateEnumCast(const Binder_Cursor &theEnum,
-                             std::ostream &theStream) {
+bool Binder_Module::generateEnumCast(const Binder_Cursor &theEnum) {
   std::string anEnumSpelling{};
   std::vector<Binder_Cursor> anEnumConsts{};
 
@@ -80,20 +81,19 @@ static bool generateEnumCast(const Binder_Cursor &theEnum,
 
   std::cout << "Binding enum cast: " << anEnumSpelling << '\n';
 
-  theStream << "template<> struct luabridge::Stack<" << anEnumSpelling
-            << "> : luabridge::Enum<" << anEnumSpelling << ','
-            << Binder_Util_Join(anEnumConsts.cbegin(), anEnumConsts.cend(),
-                                [&](const Binder_Cursor &theEnumConst) {
-                                  return anEnumSpelling +
-                                         "::" + theEnumConst.Spelling();
-                                })
-            << ">{};\n";
+  myEnumStream << "template<> struct luabridge::Stack<" << anEnumSpelling
+               << "> : luabridge::Enum<" << anEnumSpelling << ','
+               << Binder_Util_Join(anEnumConsts.cbegin(), anEnumConsts.cend(),
+                                   [&](const Binder_Cursor &theEnumConst) {
+                                     return anEnumSpelling +
+                                            "::" + theEnumConst.Spelling();
+                                   })
+               << ">{};\n";
 
   return true;
 }
 
-static bool generateEnumValue(const Binder_Cursor &theEnum,
-                              std::ostream &theStream) {
+bool Binder_Module::generateEnumValue(const Binder_Cursor &theEnum) {
   std::string anEnumSpelling{};
   std::vector<Binder_Cursor> anEnumConsts{};
 
@@ -102,21 +102,21 @@ static bool generateEnumValue(const Binder_Cursor &theEnum,
 
   std::cout << "Binding enum: " << anEnumSpelling << '\n';
 
-  theStream << ".beginNamespace(\"" << anEnumSpelling << "\")\n";
+  mySourceStream << ".beginNamespace(\"" << anEnumSpelling << "\")\n";
 
   for (const auto anEnumConst : anEnumConsts) {
     std::string anEnumConstSpelling = anEnumConst.Spelling();
-    theStream << ".addProperty(\"" << anEnumConstSpelling << "\",+[](){ return "
-              << anEnumSpelling << "::" << anEnumConstSpelling << "; })\n";
+    mySourceStream << ".addProperty(\"" << anEnumConstSpelling
+                   << "\",+[](){ return " << anEnumSpelling
+                   << "::" << anEnumConstSpelling << "; })\n";
   }
 
-  theStream << ".endNamespace()\n\n";
+  mySourceStream << ".endNamespace()\n\n";
 
   return true;
 }
 
-static bool generateCtor(const Binder_Cursor &theClass,
-                         std::ostream &theStream) {
+bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
   if (theClass.IsAbstract() || theClass.IsStaticClass()) {
     std::cout << "Skip ctor: " << theClass.Spelling()
               << " isStatic:" << theClass.IsStaticClass() << '\n';
@@ -135,18 +135,18 @@ static bool generateCtor(const Binder_Cursor &theClass,
 
   if (theClass.IsTransient()) {
     // Intrusive container is gooooooooooooooooooooooooood!
-    theStream << ".addConstructorFrom<opencascade::handle<" << aClassSpelling
-              << ">,";
+    mySourceStream << ".addConstructorFrom<opencascade::handle<"
+                   << aClassSpelling << ">,";
   } else {
-    theStream << ".addConstructor<";
+    mySourceStream << ".addConstructor<";
   }
 
   bool declCopyCtor = false;
 
   if (needsDefaultCtor) {
-    theStream << "void()";
+    mySourceStream << "void()";
   } else {
-    theStream << Binder_Util_Join(
+    mySourceStream << Binder_Util_Join(
         aCtors.cbegin(), aCtors.cend(),
         [&declCopyCtor](const Binder_Cursor &theCtor) {
           if (theCtor.IsCopyCtor())
@@ -166,10 +166,10 @@ static bool generateCtor(const Binder_Cursor &theClass,
   }
 
   if (!declCopyCtor && theClass.IsCopyable()) {
-    theStream << ",void(const " << aClassSpelling << "&)";
+    mySourceStream << ",void(const " << aClassSpelling << "&)";
   }
 
-  theStream << ">()\n";
+  mySourceStream << ">()\n";
 
   return true;
 }
@@ -385,8 +385,7 @@ private:
   std::vector<Binder_Cursor> myMethods{};
 };
 
-static bool generateMethods(const Binder_Cursor &theClass,
-                            std::ostream &theStream) {
+bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
   std::string aClassSpelling = theClass.Spelling();
   std::vector<Binder_Cursor> aMethods =
       theClass.GetChildrenOfKind(CXCursor_CXXMethod);
@@ -434,54 +433,55 @@ static bool generateMethods(const Binder_Cursor &theClass,
     const std::vector<Binder_Cursor> aMtdSt = aMethodGroup.StaticMethods();
 
     if (!aMtd.empty()) {
-      theStream << ".addFunction(\"" << anIter->first << "\",";
+      mySourceStream << ".addFunction(\"" << anIter->first << "\",";
 
       if (aMethodGroup.HasOverload()) {
-        theStream << Binder_Util_Join(
+        mySourceStream << Binder_Util_Join(
             aMtd.cbegin(), aMtd.cend(), [&](const Binder_Cursor &theMethod) {
               return generateMethod(theClass, theMethod, true);
             });
       } else {
-        theStream << generateMethod(theClass, aMtd[0]);
+        mySourceStream << generateMethod(theClass, aMtd[0]);
       }
 
-      theStream << ")\n";
+      mySourceStream << ")\n";
     }
 
     if (!aMtdSt.empty()) {
-      theStream << ".addStaticFunction(\"" << anIter->first
-                << (aMtd.empty()
-                        ? ""
-                        : "_") /* Add a "_" if there is non-static overload. */
-                << "\",";
+      mySourceStream
+          << ".addStaticFunction(\"" << anIter->first
+          << (aMtd.empty()
+                  ? ""
+                  : "_") /* Add a "_" if there is non-static overload. */
+          << "\",";
 
       if (aMethodGroup.HasOverload()) {
-        theStream << Binder_Util_Join(aMtdSt.cbegin(), aMtdSt.cend(),
-                                      [&](const Binder_Cursor &theMethod) {
-                                        return generateMethod(theClass,
-                                                              theMethod, true);
-                                      });
+        mySourceStream << Binder_Util_Join(aMtdSt.cbegin(), aMtdSt.cend(),
+                                           [&](const Binder_Cursor &theMethod) {
+                                             return generateMethod(
+                                                 theClass, theMethod, true);
+                                           });
       } else {
-        theStream << generateMethod(theClass, aMtdSt[0]);
+        mySourceStream << generateMethod(theClass, aMtdSt[0]);
       }
 
-      theStream << ")\n";
+      mySourceStream << ")\n";
     }
   }
 
   if (Binder_Util_Contains(binder_config.myExtraMethod, aClassSpelling)) {
-    theStream << binder_config.myExtraMethod.at(aClassSpelling) << '\n';
+    mySourceStream << binder_config.myExtraMethod.at(aClassSpelling) << '\n';
   }
 
   // DownCast from Standard_Transient
   if (theClass.IsTransient() && aClassSpelling != "Standard_Transient") {
-    theStream << ".addStaticFunction(\"DownCast\",+[](const "
-                 "Handle(Standard_Transient) &h){ return Handle("
-              << aClassSpelling << ")::DownCast(h); })\n";
+    mySourceStream << ".addStaticFunction(\"DownCast\",+[](const "
+                      "Handle(Standard_Transient) &h){ return Handle("
+                   << aClassSpelling << ")::DownCast(h); })\n";
   }
 
   // if (!hasCopyFunc && theClass.IsCopyable()) {
-  //   theStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
+  //   mySourceStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
   //             << " &__theSelf__){ return " << aClassSpelling
   //             << "{__theSelf__}; })\n";
   // }
@@ -489,40 +489,37 @@ static bool generateMethods(const Binder_Cursor &theClass,
   return true;
 }
 
-static bool generateFields(const Binder_Cursor &theStruct,
-                           std::ostream &theStream) {
+bool Binder_Module::generateFields(const Binder_Cursor &theStruct) {
   std::string aStructSpelling = theStruct.Spelling();
   std::vector<Binder_Cursor> aFields =
       theStruct.GetChildrenOfKind(CXCursor_FieldDecl, true);
 
   for (const auto &aField : aFields) {
     std::string aFieldSpelling = aField.Spelling();
-    theStream << ".addProperty(\"" << aFieldSpelling << "\",&"
-              << aStructSpelling << "::" << aFieldSpelling << ")\n";
+    mySourceStream << ".addProperty(\"" << aFieldSpelling << "\",&"
+                   << aStructSpelling << "::" << aFieldSpelling << ")\n";
   }
 
   return true;
 }
 
-static bool generateStruct(const Binder_Cursor &theStruct,
-                           std::ostream &theStream,
-                           const Binder_Generator *theParent) {
+bool Binder_Module::generateStruct(const Binder_Cursor &theStruct,
+                                   const Binder_Generator *theParent) {
   std::string aStructSpelling = theStruct.Spelling();
   std::cout << "Binding struct: " << aStructSpelling << '\n';
 
-  theStream << ".beginClass<" << aStructSpelling << ">(\"" << aStructSpelling
-            << "\")\n";
-  generateCtor(theStruct, theStream);
-  generateFields(theStruct, theStream);
-  generateMethods(theStruct, theStream);
-  theStream << ".endClass()\n\n";
+  mySourceStream << ".beginClass<" << aStructSpelling << ">(\""
+                 << aStructSpelling << "\")\n";
+  generateCtor(theStruct);
+  generateFields(theStruct);
+  generateMethods(theStruct);
+  mySourceStream << ".endClass()\n\n";
 
   return true;
 }
 
-static bool generateClass(const Binder_Cursor &theClass,
-                          std::ostream &theStream,
-                          const Binder_Generator *theParent) {
+bool Binder_Module::generateClass(const Binder_Cursor &theClass,
+                                  const Binder_Generator *theParent) {
   std::string aClassSpelling = theClass.Spelling();
   std::cout << "Binding class: " << aClassSpelling << '\n';
   std::vector<Binder_Cursor> aBases = theClass.Bases();
@@ -537,53 +534,62 @@ static bool generateClass(const Binder_Cursor &theClass,
   }
 
   if (baseRegistered) {
-    theStream << ".deriveClass<" << aClassSpelling << ", "
-              << aBases[0].GetDefinition().Spelling() << ">(\""
-              << aClassSpelling << "\")\n";
+    mySourceStream << ".deriveClass<" << aClassSpelling << ", "
+                   << aBases[0].GetDefinition().Spelling() << ">(\""
+                   << aClassSpelling << "\")\n";
   } else {
-    theStream << ".beginClass<" << aClassSpelling << ">(\"" << aClassSpelling
-              << "\")\n";
+    mySourceStream << ".beginClass<" << aClassSpelling << ">(\""
+                   << aClassSpelling << "\")\n";
   }
 
-  generateCtor(theClass, theStream);
-  generateMethods(theClass, theStream);
+  generateCtor(theClass);
+  generateMethods(theClass);
 
-  theStream << ".endClass()\n\n";
+  mySourceStream << ".endClass()\n\n";
 
   return true;
 }
 
-bool Binder_Module::generate(const std::string &theExportDir) {
+bool Binder_Module::Init() {
+  myExportName = myExportDir + "/l" + myName;
+  myPrefix = myName + "_";
+
+  myHeaderStream = std::ofstream(myExportName + ".h");
+  mySourceStream = std::ofstream(myExportName + ".cpp");
+  myEnumStream = std::ofstream(myExportDir + "/lenums.h", std::ios::app);
+  myMetaStream = std::ofstream(myExportDir + "/_meta/" + myName + ".lua");
+
+  return true;
+}
+
+bool Binder_Module::Generate() {
   Binder_Cursor aCursor = clang_getTranslationUnitCursor(myTransUnit);
-  std::string theExportName = theExportDir + "/l" + myName;
-  std::string thePrefix = myName + "_";
 
-  // The header file.
-  std::ofstream aStream{theExportName + ".h"};
   std::string aGuard = "_LuaOCCT_l" + myName + "_HeaderFile";
-  aStream << "/* This file is generated, do not edit. */\n\n";
-  aStream << "#ifndef " << aGuard << "\n#define " << aGuard << "\n\n";
-  aStream << "#include \"lenums.h\"\n\n";
-  aStream << "void luaocct_init_" << myName << "(lua_State *L);\n\n";
-  aStream << "#endif\n";
+  myHeaderStream << "/* This file is generated, do not edit. */\n\n";
+  myHeaderStream << "#ifndef " << aGuard << "\n#define " << aGuard << "\n\n";
+  myHeaderStream << "#include \"lenums.h\"\n\n";
+  myHeaderStream << "void luaocct_init_" << myName << "(lua_State *L);\n\n";
+  myHeaderStream << "#endif\n";
 
-  // Enum header file.
-  std::ofstream anEnumStream(theExportDir + "/lenums.h", std::ios::app);
+  myMetaStream << "---@meta _\n";
+  myMetaStream << "-- This file is generated, do not edit.\n";
+  myMetaStream << "error('Cannot require a meta file')\n\n";
 
-  // The source file.
-  aStream = std::ofstream(theExportName + ".cpp");
-
-  aStream << "/* This file is generated, do not edit. */\n\n";
-  aStream << "#include \"l" << myName << ".h\"\n\n";
+  mySourceStream << "/* This file is generated, do not edit. */\n\n";
+  mySourceStream << "#include \"l" << myName << ".h\"\n\n";
+  mySourceStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
+  mySourceStream << "luabridge::getGlobalNamespace(L)\n";
+  mySourceStream << ".beginNamespace(\"LuaOCCT\")\n";
+  mySourceStream << ".beginNamespace(\"" << myName << "\")\n\n";
 
   // Bind enumerators.
   std::vector<Binder_Cursor> anEnums = aCursor.Enums();
-  std::ostringstream anEnumChuck{};
 
   for (const auto &anEnum : anEnums) {
     std::string anEnumSpelling = anEnum.Spelling();
 
-    if (!Binder_Util_StartsWith(anEnumSpelling, thePrefix))
+    if (!Binder_Util_StartsWith(anEnumSpelling, myPrefix))
       continue;
 
     if (anEnumSpelling.empty())
@@ -592,19 +598,12 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (!myParent->AddVisitedClass(anEnumSpelling))
       continue;
 
-    if (!generateEnumCast(anEnum, anEnumStream))
+    if (!generateEnumCast(anEnum))
       continue;
 
-    if (!generateEnumValue(anEnum, anEnumChuck))
+    if (!generateEnumValue(anEnum))
       continue;
   }
-
-  aStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
-  aStream << "luabridge::getGlobalNamespace(L)\n";
-  aStream << ".beginNamespace(\"LuaOCCT\")\n";
-  aStream << ".beginNamespace(\"" << myName << "\")\n\n";
-
-  aStream << anEnumChuck.str();
 
   // Bind structs.
   std::vector<Binder_Cursor> aStructs =
@@ -613,11 +612,11 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   for (const auto &aStruct : aStructs) {
     std::string aStructSpelling = aStruct.Spelling();
 
-    if (!Binder_Util_StartsWith(aStructSpelling, thePrefix) &&
+    if (!Binder_Util_StartsWith(aStructSpelling, myPrefix) &&
         aStructSpelling != myName)
       continue;
 
-    generateStruct(aStruct, aStream, myParent);
+    generateStruct(aStruct, myParent);
   }
 
   // Bind classes.
@@ -627,18 +626,9 @@ bool Binder_Module::generate(const std::string &theExportDir) {
   for (const auto &aClass : aClasses) {
     std::string aClassSpelling = aClass.Spelling();
 
-    if (!Binder_Util_StartsWith(aClassSpelling, thePrefix) &&
+    if (!Binder_Util_StartsWith(aClassSpelling, myPrefix) &&
         aClassSpelling != myName)
       continue;
-
-    // if (Binder_Util_StartsWith(aClassSpelling, "Handle"))
-    //   continue;
-
-    // if (Binder_Util_StartsWith(aClassSpelling, "NCollection"))
-    //   continue;
-
-    // if (Binder_Util_StartsWith(aClassSpelling, "TCol"))
-    //   continue;
 
     if (Binder_Util_StrContains(aClassSpelling, "Sequence"))
       continue;
@@ -670,21 +660,21 @@ bool Binder_Module::generate(const std::string &theExportDir) {
     if (!myParent->AddVisitedClass(aClassSpelling))
       continue;
 
-    generateClass(aClass, aStream, myParent);
+    generateClass(aClass, myParent);
   }
 
-  aStream << ".endNamespace()\n.endNamespace();\n}\n";
-  std::cout << "Module exported: " << theExportName << '\n' << std::endl;
+  mySourceStream << ".endNamespace()\n.endNamespace();\n}\n";
+  std::cout << "Module exported: " << myExportName << '\n' << std::endl;
 
   return true;
 }
 
-int Binder_Module::save(const std::string &theFilePath) const {
+int Binder_Module::Save(const std::string &theFilePath) const {
   return clang_saveTranslationUnit(myTransUnit, theFilePath.c_str(),
                                    CXSaveTranslationUnit_None);
 }
 
-bool Binder_Module::load(const std::string &theFilePath) {
+bool Binder_Module::Load(const std::string &theFilePath) {
   CXIndex anIndex = clang_createIndex(0, 0);
   CXTranslationUnit anTransUnit =
       clang_createTranslationUnit(anIndex, theFilePath.c_str());

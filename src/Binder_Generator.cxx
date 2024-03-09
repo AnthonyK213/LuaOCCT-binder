@@ -20,16 +20,24 @@ bool Binder_Generator::AddVisitedClass(const std::string &theClass) {
 
 #define MOD_CALL(F) myCurMod ? (myCurMod->F) : false
 
-bool Binder_Generator::Parse() { return MOD_CALL(parse()); }
+bool Binder_Generator::Parse() { return MOD_CALL(Parse()); }
 
-bool Binder_Generator::Generate() { return MOD_CALL(generate(myExportDir)); }
+bool Binder_Generator::Generate() {
+  if (!myCurMod->Init())
+    return false;
+
+  if (!myCurMod->Generate())
+    return false;
+
+  return true;
+}
 
 int Binder_Generator::Save(const std::string &theFilePath) const {
-  return MOD_CALL(save(theFilePath));
+  return MOD_CALL(Save(theFilePath));
 }
 
 bool Binder_Generator::Load(const std::string &theFilePath) {
-  return MOD_CALL(load(theFilePath));
+  return MOD_CALL(Load(theFilePath));
 }
 
 #undef MOD_CALL
