@@ -32,6 +32,11 @@ protected:
 
   bool generateCtor(const Binder_Cursor &theClass);
 
+  std::string generateMethod(const Binder_Cursor &theClass,
+                             const Binder_Cursor &theMethod,
+                             const std::string &theSuffix,
+                             bool theIsOverload = false);
+
   bool generateMethods(const Binder_Cursor &theClass);
 
   bool generateFields(const Binder_Cursor &theStruct);

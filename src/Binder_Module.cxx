@@ -103,15 +103,20 @@ bool Binder_Module::generateEnumValue(const Binder_Cursor &theEnum) {
   std::cout << "Binding enum: " << anEnumSpelling << '\n';
 
   mySourceStream << ".beginNamespace(\"" << anEnumSpelling << "\")\n";
+  myMetaStream << "---@enum " << anEnumSpelling << '\n';
+  myMetaStream << "LuaOCCT." << myName << '.' << anEnumSpelling << " = {\n";
 
   for (const auto anEnumConst : anEnumConsts) {
     std::string anEnumConstSpelling = anEnumConst.Spelling();
     mySourceStream << ".addProperty(\"" << anEnumConstSpelling
                    << "\",+[](){ return " << anEnumSpelling
                    << "::" << anEnumConstSpelling << "; })\n";
+    myMetaStream << '\t' << anEnumConstSpelling << " = "
+                 << clang_getEnumConstantDeclValue(anEnumConst) << ",\n";
   }
 
   mySourceStream << ".endNamespace()\n\n";
+  myMetaStream << "}\n\n";
 
   return true;
 }
@@ -170,6 +175,7 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
   }
 
   mySourceStream << ">()\n";
+  myMetaStream << "---@operator call:" << aClassSpelling << '\n';
 
   return true;
 }
@@ -199,9 +205,50 @@ static bool isIgnoredMethod(const Binder_Cursor &theMethod) {
   return false;
 }
 
-static std::string generateMethod(const Binder_Cursor &theClass,
-                                  const Binder_Cursor &theMethod,
-                                  bool theIsOverload = false) {
+static std::string luaTypeMap(const Binder_Type &theType) {
+  Binder_Type aType = theType.IsPointerLike() ? theType.GetPointee() : theType;
+  Binder_Cursor aDecl = aType.GetDeclaration();
+  std::string aDeclSpelling = aDecl.Spelling();
+  std::string aTypeSpelling = aType.Spelling();
+
+  static std::unordered_map<std::string, std::string> aMap = {
+      {"Standard_Integer", "integer"},
+      {"Standard_Size", "integer"},
+      {"Standard_Real", "number"},
+      {"Standard_Boolean", "boolean"},
+      {"Standard_CString", "string"},
+      {"TCollection_AsciiString", "string"},
+      {"TCollection_ExtendedString", "string"},
+  };
+
+  if (Binder_Util_Contains(aMap, aDeclSpelling)) {
+    return aMap[aDeclSpelling];
+  }
+
+  if (aDeclSpelling == "handle") {
+    Binder_Type aSpecType = clang_Type_getTemplateArgumentAsType(aType, 0);
+    return luaTypeMap(aSpecType);
+  }
+
+  Binder_Cursor aTmpl = clang_getSpecializedCursorTemplate(aDecl);
+  if (!aTmpl.IsNull()) {
+    std::string aTmplSpelling = aTmpl.Spelling();
+    if (aTmplSpelling == "NCollection_Array1") {
+      Binder_Type aTmplArgType = clang_Cursor_getTemplateArgumentType(aDecl, 0);
+      return luaTypeMap(aTmplArgType) + "[]";
+    } else if (aTmplSpelling == "NCollection_Array2") {
+      Binder_Type aTmplArgType = clang_Cursor_getTemplateArgumentType(aDecl, 0);
+      return luaTypeMap(aTmplArgType) + "[][]";
+    }
+  }
+
+  return aDeclSpelling;
+}
+
+std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
+                                          const Binder_Cursor &theMethod,
+                                          const std::string &theSuffix,
+                                          bool theIsOverload) {
   std::string aClassSpelling = theClass.Spelling();
   std::string aMethodSpelling = theMethod.Spelling();
   std::vector<Binder_Cursor> aParams = theMethod.Parameters();
@@ -234,9 +281,17 @@ static std::string generateMethod(const Binder_Cursor &theClass,
     return oss.str();
   }
 
-  if (theMethod.NeedsInOutMethod() /* ||
-      Binder_Util_Contains(binder::DAMN_INLINED,
-                           aClassSpelling + "::" + aMethodSpelling ) */) {
+  bool genMeta = !theIsOverload;
+
+  if (genMeta) {
+    myMetaStream << "---\n";
+  }
+
+  std::string aF = "function LuaOCCT." + myName + '.' + aClassSpelling +
+                   (theMethod.IsStaticMethod() ? "." : ":") + aMethodSpelling +
+                   theSuffix;
+
+  if (theMethod.NeedsInOutMethod()) {
     std::vector<Binder_Cursor> anIn{};
     std::vector<Binder_Cursor> anOut{};
     theMethod.GetInOutParams(anIn, anOut);
@@ -334,6 +389,36 @@ static std::string generateMethod(const Binder_Cursor &theClass,
       oss << " }";
     }
 
+    if (genMeta) {
+      for (auto it = anIn.cbegin(); it != anIn.cend(); ++it) {
+        myMetaStream << "---@param " << it->Spelling() << ' '
+                     << luaTypeMap(it->Type()) << '\n';
+      }
+      if (anTupleOut) {
+        myMetaStream << "---@return {";
+        int i = 1;
+        if (anHasRetVal) {
+          myMetaStream << '[' << i << "]:" << luaTypeMap(aRetType) << ',';
+          ++i;
+        }
+        for (const auto &o : anOut) {
+          myMetaStream << '[' << i << "]:" << luaTypeMap(o.Type()) << ',';
+          ++i;
+        }
+        myMetaStream << '}' << '\n';
+      } else if (nbReturn == 1) {
+        myMetaStream << "---@return " << luaTypeMap(aRetType) << '\n';
+      }
+
+      myMetaStream << aF << '('
+                   << Binder_Util_Join(
+                          anIn.cbegin(), anIn.cend(),
+                          +[](const Binder_Cursor &theParam) {
+                            return theParam.Spelling();
+                          })
+                   << ") end\n\n";
+    }
+
     return oss.str();
   }
 
@@ -346,6 +431,21 @@ static std::string generateMethod(const Binder_Cursor &theClass,
     oss << ">(&" << aClassSpelling << "::" << aMethodSpelling << ')';
   } else {
     oss << '&' << aClassSpelling << "::" << aMethodSpelling;
+    for (auto it = aParams.cbegin(); it != aParams.cend(); ++it) {
+      myMetaStream << "---@param " << it->Spelling() << ' '
+                   << luaTypeMap(it->Type()) << '\n';
+    }
+    Binder_Type aRetType = theMethod.ReturnType();
+    if (!aRetType.IsNull() && aRetType.Spelling() != "void") {
+      myMetaStream << "---@return " << luaTypeMap(aRetType) << '\n';
+    }
+    myMetaStream << aF << '('
+                 << Binder_Util_Join(
+                        aParams.cbegin(), aParams.cend(),
+                        +[](const Binder_Cursor &theParam) {
+                          return theParam.Spelling();
+                        })
+                 << ") end\n\n";
   }
 
   return oss.str();
@@ -392,8 +492,6 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
 
   std::map<std::string, Binder_MethodGroup> aGroups{};
 
-  bool hasCopyFunc = false;
-
   // Group cxxmethods by name.
   for (const auto &aMethod : aMethods) {
     std::string aFuncSpelling = aMethod.Spelling();
@@ -401,9 +499,6 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
     std::string aFuncName = aClassSpelling + "::" + aFuncSpelling;
     if (Binder_Util_Contains(binder_config.myBlackListMethod, aFuncName))
       continue;
-
-    if (aFuncSpelling == "Copy")
-      hasCopyFunc = true;
 
     if (aMethod.IsOperator()) {
       if (aFuncSpelling == "operator-") {
@@ -431,38 +526,50 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
     const Binder_MethodGroup &aMethodGroup = anIter->second;
     const std::vector<Binder_Cursor> aMtd = aMethodGroup.Methods();
     const std::vector<Binder_Cursor> aMtdSt = aMethodGroup.StaticMethods();
+    const std::string aMethodMeta = "LuaOCCT." + aClassSpelling;
+    const std::string &aMethodSpelling = anIter->first;
 
     if (!aMtd.empty()) {
-      mySourceStream << ".addFunction(\"" << anIter->first << "\",";
+      mySourceStream << ".addFunction(\"" << aMethodSpelling << "\",";
 
       if (aMethodGroup.HasOverload()) {
         mySourceStream << Binder_Util_Join(
-            aMtd.cbegin(), aMtd.cend(), [&](const Binder_Cursor &theMethod) {
-              return generateMethod(theClass, theMethod, true);
+            aMtd.cbegin(), aMtd.cend(),
+            [&, this](const Binder_Cursor &theMethod) {
+              return generateMethod(theClass, theMethod, "", true);
             });
+        myMetaStream << "---\n";
+        myMetaStream << "---@param ... any\n";
+        myMetaStream << "---@return any\n";
+        myMetaStream << "function " << aMethodMeta << ':' << aMethodSpelling
+                     << "(...) end\n\n";
       } else {
-        mySourceStream << generateMethod(theClass, aMtd[0]);
+        mySourceStream << generateMethod(theClass, aMtd[0], "");
       }
 
       mySourceStream << ")\n";
     }
 
     if (!aMtdSt.empty()) {
-      mySourceStream
-          << ".addStaticFunction(\"" << anIter->first
-          << (aMtd.empty()
-                  ? ""
-                  : "_") /* Add a "_" if there is non-static overload. */
-          << "\",";
+      std::string suffix =
+          (aMtd.empty() ? ""
+                        : "_"); /* Add a "_" if there is non-static overload. */
+      mySourceStream << ".addStaticFunction(\"" << aMethodSpelling << suffix
+                     << "\",";
 
       if (aMethodGroup.HasOverload()) {
-        mySourceStream << Binder_Util_Join(aMtdSt.cbegin(), aMtdSt.cend(),
-                                           [&](const Binder_Cursor &theMethod) {
-                                             return generateMethod(
-                                                 theClass, theMethod, true);
-                                           });
+        mySourceStream << Binder_Util_Join(
+            aMtdSt.cbegin(), aMtdSt.cend(),
+            [&, this](const Binder_Cursor &theMethod) {
+              return generateMethod(theClass, theMethod, suffix, true);
+            });
+        myMetaStream << "---\n";
+        myMetaStream << "---@param ... any\n";
+        myMetaStream << "---@return any\n";
+        myMetaStream << "function " << aMethodMeta << '.' << aMethodSpelling
+                     << suffix << "(...) end\n\n";
       } else {
-        mySourceStream << generateMethod(theClass, aMtdSt[0]);
+        mySourceStream << generateMethod(theClass, aMtdSt[0], suffix);
       }
 
       mySourceStream << ")\n";
@@ -478,13 +585,13 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
     mySourceStream << ".addStaticFunction(\"DownCast\",+[](const "
                       "Handle(Standard_Transient) &h){ return Handle("
                    << aClassSpelling << ")::DownCast(h); })\n";
+    myMetaStream << "---Down casting operator from handle to " << aClassSpelling
+                 << ".\n";
+    myMetaStream << "---@param h Standard_Transient\n";
+    myMetaStream << "---@return " << aClassSpelling << '\n';
+    myMetaStream << "function LuaOCCT." << myName << '.' << aClassSpelling
+                 << ".DownCast(h) end\n\n";
   }
-
-  // if (!hasCopyFunc && theClass.IsCopyable()) {
-  //   mySourceStream << ".addFunction(\"Copy\",+[](const " << aClassSpelling
-  //             << " &__theSelf__){ return " << aClassSpelling
-  //             << "{__theSelf__}; })\n";
-  // }
 
   return true;
 }
@@ -534,15 +641,21 @@ bool Binder_Module::generateClass(const Binder_Cursor &theClass,
   }
 
   if (baseRegistered) {
-    mySourceStream << ".deriveClass<" << aClassSpelling << ", "
-                   << aBases[0].GetDefinition().Spelling() << ">(\""
-                   << aClassSpelling << "\")\n";
+    std::string aBaseSpelling = aBases[0].GetDefinition().Spelling();
+    mySourceStream << ".deriveClass<" << aClassSpelling << ',' << aBaseSpelling
+                   << ">(\"" << aClassSpelling << "\")\n";
+    myMetaStream << "---@class " << aClassSpelling << " : " << aBaseSpelling
+                 << '\n';
   } else {
     mySourceStream << ".beginClass<" << aClassSpelling << ">(\""
                    << aClassSpelling << "\")\n";
+    myMetaStream << "---@class " << aClassSpelling << '\n';
   }
 
   generateCtor(theClass);
+
+  myMetaStream << "LuaOCCT." << myName << '.' << aClassSpelling << " = {}\n\n";
+
   generateMethods(theClass);
 
   mySourceStream << ".endClass()\n\n";
@@ -572,16 +685,17 @@ bool Binder_Module::Generate() {
   myHeaderStream << "void luaocct_init_" << myName << "(lua_State *L);\n\n";
   myHeaderStream << "#endif\n";
 
-  myMetaStream << "---@meta _\n";
-  myMetaStream << "-- This file is generated, do not edit.\n";
-  myMetaStream << "error('Cannot require a meta file')\n\n";
-
   mySourceStream << "/* This file is generated, do not edit. */\n\n";
   mySourceStream << "#include \"l" << myName << ".h\"\n\n";
   mySourceStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
   mySourceStream << "luabridge::getGlobalNamespace(L)\n";
   mySourceStream << ".beginNamespace(\"LuaOCCT\")\n";
   mySourceStream << ".beginNamespace(\"" << myName << "\")\n\n";
+
+  myMetaStream << "---@meta _\n";
+  myMetaStream << "-- This file is generated, do not edit.\n";
+  myMetaStream << "error('Cannot require a meta file')\n\n";
+  myMetaStream << "LuaOCCT." << myName << " = {}\n\n";
 
   // Bind enumerators.
   std::vector<Binder_Cursor> anEnums = aCursor.Enums();
