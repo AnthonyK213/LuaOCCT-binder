@@ -31,6 +31,7 @@ private:
 public:
   toml::v3::ex::parse_result myToml;
   std::vector<std::string> myModules{};
+  std::vector<std::string> myExtraModules{};
   std::set<std::string> myImmutableType{};
   std::unordered_map<std::string, std::string> myLuaOperators{};
   std::set<std::string> myBlackListClass{};

@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <fstream>
 
+extern Binder_Config binder_config;
+
 Binder_Generator::Binder_Generator() : myCurMod(nullptr), myExportDir(".") {}
 
 Binder_Generator::~Binder_Generator() {}
@@ -63,8 +65,7 @@ bool Binder_Generator::GenerateEnumsEnd() {
   return true;
 }
 
-bool Binder_Generator::GenerateMain(
-    const std::vector<std::string> &theModules) {
+bool Binder_Generator::GenerateMain() {
   std::string thePath = myExportDir + "/luaocct.cpp";
 
   // The header file.
@@ -72,20 +73,25 @@ bool Binder_Generator::GenerateMain(
   aStream << "/* This file is generated, do not edit. */\n\n";
   aStream << "#include \"luaocct.h\"\n";
 
-  for (const auto &aMod : theModules) {
+  for (const auto &aMod : binder_config.myModules) {
     aStream << "#include \"l" << aMod << ".h\"\n";
   }
 
-  aStream << "#include \"lutil.h\"\n\n";
-  aStream << "int32_t luaopen_luaocct(lua_State *L) {\n";
+  for (const auto &aMod : binder_config.myExtraModules) {
+    aStream << "#include \"l" << aMod << ".h\"\n";
+  }
 
-  for (const auto &aMod : theModules) {
+  aStream << "\nint32_t luaopen_luaocct(lua_State *L) {\n";
+
+  for (const auto &aMod : binder_config.myModules) {
     aStream << "\tluaocct_init_" << aMod << "(L);\n";
   }
 
-  aStream << "\tluaocct_init_util(L);\n";
-  aStream << "\n\treturn 0;\n}\n";
+  for (const auto &aMod : binder_config.myExtraModules) {
+    aStream << "\tluaocct_init_" << aMod << "(L);\n";
+  }
 
+  aStream << "\n\treturn 0;\n}\n";
   std::cout << "Exported: " << thePath << '\n' << std::endl;
 
   return true;

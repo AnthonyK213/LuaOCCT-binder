@@ -1,9 +1,5 @@
 # NOTE: Keep the order correct!!
-modules = [
-  "Standard",
-  "gp",
-  "Geom",
-]
+modules = ["Standard", "gp", "Geom"]
 
 immutable_type = [
   "Standard_Boolean",
@@ -19,6 +15,8 @@ immutable_type = [
   "TCollection_ExtendedString",
   "TDF_Label",
 ]
+
+extra_modules = ["util", "base"]
 
 [lua_operators]
 "operator+" = "__add"

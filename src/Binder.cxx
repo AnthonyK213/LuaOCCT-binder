@@ -46,51 +46,6 @@ int main(int argc, char const *argv[]) {
   }
 
   binder_config.Init(argv[4]);
-
-  // std::vector<std::string> aMods{};
-
-  // for (auto &entry : std::filesystem::directory_iterator(modDir)) {
-  //   std::string name = entry.path().stem().string();
-  //   aMods.push_back(name);
-  // }
-
-  /* clang-format off */
-
-  /// NOTE: Keep the order correct!!
-  // std::vector<std::string> aMods = {
-  //     "Standard",
-  //     "GeomAbs",
-  //     "TopAbs",
-  //     "Precision",
-  //     // "TCollection",
-  //     "gp",
-  //     "Geom2d",
-  //     "Geom",
-  //     "TopoDS",
-  //     "TopExp",
-  //     "TopLoc",
-  //     "Poly",
-  //     "Message",
-  //     "BRepBuilderAPI",
-  //     "IntTools",
-  //     "BOPDS",
-  //     "BOPAlgo",
-  //     "BRepAlgoAPI",
-  //     "BRep",
-  //     "BRepLib",
-  //     "Bnd",
-  //     "CPnts",
-  //     "GeomConvert",
-  //     "IMeshTools",
-  //     "BRepGProp",
-  //     "GProp",
-  //     // "TDocStd",
-  //     // "TDF",
-  //     // "XCAFPrs",
-  // };
-
-  /* clang-format on */
-
   aGenerator.GenerateEnumsBegin();
 
   for (const std::string &aModName : binder_config.myModules) {
@@ -107,7 +62,7 @@ int main(int argc, char const *argv[]) {
   }
 
   aGenerator.GenerateEnumsEnd();
-  aGenerator.GenerateMain(binder_config.myModules);
+  aGenerator.GenerateMain();
 
   return 0;
 }

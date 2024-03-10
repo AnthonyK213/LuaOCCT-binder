@@ -79,6 +79,9 @@ bool Binder_Config::load() {
   if (!loadStringVec(myToml["modules"], myModules))
     return false;
 
+  if (!loadStringVec(myToml["extra_modules"], myExtraModules))
+    return false;
+
   if (!loadStringSet(myToml["immutable_type"], myImmutableType))
     return false;
 
