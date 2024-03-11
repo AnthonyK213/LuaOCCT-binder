@@ -1,5 +1,10 @@
 # NOTE: Keep the order correct!!
-modules = ["Standard", "gp", "Geom"]
+modules = [
+  # "Standard",
+  # "gp",
+  # "Geom",
+  "LODoc",
+]
 
 immutable_type = [
   "Standard_Boolean",

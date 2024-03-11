@@ -230,20 +230,21 @@ static std::string luaTypeMap(const Binder_Type &theType) {
     return luaTypeMap(aSpecType);
   }
 
-  Binder_Cursor aTmpl = clang_getSpecializedCursorTemplate(aDecl);
-  if (!aTmpl.IsNull()) {
-    std::string aTmplSpelling = aTmpl.Spelling();
-    static const std::set<std::string> IS_ARRAY1{
-        "NCollection_Array1",
-        "NCollection_List",
-        "vector",
-    };
+  static const std::set<std::string> IS_ARRAY1{
+      "NCollection_Array1",
+      "NCollection_List",
+      "std::vector",
+  };
 
+  Binder_Type aTp = clang_getTypedefDeclUnderlyingType(aDecl);
+  if (!aTp.IsNull()) {
+    Binder_Cursor aD = aTp.GetDeclaration();
+    std::string aTmplSpelling = aD.Spelling();
     if (Binder_Util_Contains(IS_ARRAY1, aTmplSpelling)) {
-      Binder_Type aTmplArgType = clang_Cursor_getTemplateArgumentType(aDecl, 0);
+      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
       return luaTypeMap(aTmplArgType) + "[]";
     } else if (aTmplSpelling == "NCollection_Array2") {
-      Binder_Type aTmplArgType = clang_Cursor_getTemplateArgumentType(aDecl, 0);
+      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
       return luaTypeMap(aTmplArgType) + "[][]";
     }
   }
