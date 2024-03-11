@@ -211,7 +211,7 @@ static std::string luaTypeMap(const Binder_Type &theType) {
   std::string aDeclSpelling = aDecl.Spelling();
   std::string aTypeSpelling = aType.Spelling();
 
-  static std::unordered_map<std::string, std::string> aMap = {
+  static std::unordered_map<std::string, std::string> aMap{
       {"Standard_Integer", "integer"},
       {"Standard_Size", "integer"},
       {"Standard_Real", "number"},
@@ -233,7 +233,13 @@ static std::string luaTypeMap(const Binder_Type &theType) {
   Binder_Cursor aTmpl = clang_getSpecializedCursorTemplate(aDecl);
   if (!aTmpl.IsNull()) {
     std::string aTmplSpelling = aTmpl.Spelling();
-    if (aTmplSpelling == "NCollection_Array1") {
+    static const std::set<std::string> IS_ARRAY1{
+        "NCollection_Array1",
+        "NCollection_List",
+        "vector",
+    };
+
+    if (Binder_Util_Contains(IS_ARRAY1, aTmplSpelling)) {
       Binder_Type aTmplArgType = clang_Cursor_getTemplateArgumentType(aDecl, 0);
       return luaTypeMap(aTmplArgType) + "[]";
     } else if (aTmplSpelling == "NCollection_Array2") {
