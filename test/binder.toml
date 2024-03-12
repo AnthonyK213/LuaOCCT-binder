@@ -46,7 +46,7 @@ method = [
   "IntTools_PntOn2Faces::IsValid",
   "BOPAlgo_PaveFiller::Iterator",
 ]
-copyable = ["Geom_SweptSurface"]
+copyable = ["Geom_SweptSurface", "LODoc_DocumentExplorer"]
 
 [extra_method]
 gp_XYZ = '''
