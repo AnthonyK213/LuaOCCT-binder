@@ -31,6 +31,28 @@ bool Binder_Cursor::IsTransient() const {
   return false;
 }
 
+std::vector<Binder_Cursor> Binder_Cursor::Ctors(bool thePublicOnly) const {
+  std::vector<Binder_Cursor> aChildren = GetChildren();
+  std::vector<Binder_Cursor> aChildrenQualified{};
+
+  std::copy_if(aChildren.cbegin(), aChildren.cend(),
+               std::back_inserter(aChildrenQualified),
+               [&](const Binder_Cursor &theCursor) {
+                 if (theCursor.Kind() != CXCursor_Constructor)
+                   return false;
+
+                 if (thePublicOnly && !theCursor.IsPublic())
+                   return false;
+
+                 if (theCursor.IsDeleted())
+                   return false;
+
+                 return true;
+               });
+
+  return aChildrenQualified;
+}
+
 bool Binder_Cursor::IsOperator() const {
   if (IsFunction() || IsCxxMethod()) {
     return Binder_Util_Contains(binder_config.myLuaOperators, Spelling());
@@ -206,7 +228,7 @@ Binder_Cursor::GetChildrenOfKind(CXCursorKind theKind,
 
   std::copy_if(aChildren.cbegin(), aChildren.cend(),
                std::back_inserter(aChildrenQualified),
-               [=](const Binder_Cursor &theCursor) {
+               [&](const Binder_Cursor &theCursor) {
                  if (theCursor.Kind() != theKind)
                    return false;
 
@@ -248,9 +270,6 @@ bool Binder_Cursor::IsCopyable() const {
   if (IsStaticClass() || IsAbstract())
     return false;
 
-  // if (Binder_Util_StartsWith(Spelling(), "gp"))
-  //   return true;
-
   /// WORKAROUND: Libclang makes some mistakes on determine if a class is
   /// abstract?
   if (Binder_Util_Contains(binder_config.myBlackListCopyable, Spelling()))
@@ -261,12 +280,17 @@ bool Binder_Cursor::IsCopyable() const {
       return false;
   }
 
-  std::vector<Binder_Cursor> aCtors = Ctors();
+  std::vector<Binder_Cursor> aCtors = GetChildrenOfKind(CXCursor_Constructor);
   bool hasMoveCtor = false;
 
   for (const auto &aCtor : aCtors) {
-    if (aCtor.IsCopyCtor() && aCtor.IsPublic())
-      return true;
+    if (aCtor.IsCopyCtor()) {
+      if (aCtor.IsDeleted())
+        return false;
+
+      if (aCtor.IsPublic())
+        return true;
+    }
 
     if (aCtor.IsMoveCtor())
       hasMoveCtor = true;

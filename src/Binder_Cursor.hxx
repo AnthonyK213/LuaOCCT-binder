@@ -156,9 +156,7 @@ public:
     return GetChildrenOfKind(CXCursor_CXXBaseSpecifier);
   }
 
-  std::vector<Binder_Cursor> Ctors(bool thePublicOnly = false) const {
-    return GetChildrenOfKind(CXCursor_Constructor, thePublicOnly);
-  }
+  std::vector<Binder_Cursor> Ctors(bool thePublicOnly = false) const;
 
   std::vector<Binder_Cursor> Dtors() const {
     return GetChildrenOfKind(CXCursor_Destructor);
@@ -167,7 +165,7 @@ public:
   bool HasPublicDtor() const {
     return !GetChildrenOfKind(CXCursor_Destructor, true).empty();
   }
-  
+
   bool IsCopyable() const;
 
   std::vector<Binder_Cursor> Enums() const {
@@ -207,6 +205,8 @@ public:
 
   std::vector<Binder_Cursor>
   GetChildrenOfKind(CXCursorKind theKind, bool thePublicOnly = false) const;
+
+  bool IsDeleted() const { return clang_CXXMethod_isDeleted(myCursor); }
 
 private:
   CXCursor myCursor;

@@ -131,8 +131,7 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
   std::string aClassSpelling = theClass.Spelling();
   bool needsDefaultCtor = theClass.NeedsDefaultCtor();
 
-  std::vector<Binder_Cursor> aCtors =
-      theClass.GetChildrenOfKind(CXCursor_Constructor, true);
+  std::vector<Binder_Cursor> aCtors = theClass.Ctors(true);
 
   // if no public ctor but non-public, do not bind any ctor.
   if (aCtors.empty() && !needsDefaultCtor)

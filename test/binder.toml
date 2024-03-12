@@ -21,7 +21,7 @@ immutable_type = [
   "TDF_Label",
 ]
 
-extra_modules = ["util", "base"]
+extra_modules = []
 
 [lua_operators]
 "operator+" = "__add"
