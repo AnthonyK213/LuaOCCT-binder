@@ -206,7 +206,13 @@ public:
   std::vector<Binder_Cursor>
   GetChildrenOfKind(CXCursorKind theKind, bool thePublicOnly = false) const;
 
-  bool IsDeleted() const { return clang_CXXMethod_isDeleted(myCursor); }
+  bool IsDeleted() const {
+#if CINDEX_VERSION_ENCODE <= 62
+    return false;
+#else
+    return clang_CXXMethod_isDeleted(myCursor);
+#endif
+  }
 
 private:
   CXCursor myCursor;

@@ -34,6 +34,7 @@ bool Binder_Cursor::IsTransient() const {
 std::vector<Binder_Cursor> Binder_Cursor::Ctors(bool thePublicOnly) const {
   std::vector<Binder_Cursor> aChildren = GetChildren();
   std::vector<Binder_Cursor> aChildrenQualified{};
+  bool isCopyable = IsCopyable();
 
   std::copy_if(aChildren.cbegin(), aChildren.cend(),
                std::back_inserter(aChildrenQualified),
@@ -44,7 +45,13 @@ std::vector<Binder_Cursor> Binder_Cursor::Ctors(bool thePublicOnly) const {
                  if (thePublicOnly && !theCursor.IsPublic())
                    return false;
 
+#if CINDEX_VERSION_ENCODE > 62
                  if (theCursor.IsDeleted())
+                   return false;
+#endif
+
+                 if ((theCursor.IsCopyCtor() || theCursor.IsMoveCtor()) &&
+                     !isCopyable)
                    return false;
 
                  return true;
