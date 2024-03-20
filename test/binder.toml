@@ -1,7 +1,7 @@
 # NOTE: Keep the order correct!!
 modules = [
   # "Standard",
-  # "gp",
+  "gp",
   # "Geom",
   "LODoc",
 ]

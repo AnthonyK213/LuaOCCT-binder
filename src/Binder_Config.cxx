@@ -56,10 +56,10 @@ bool Binder_Config::loadStringSet(
 bool Binder_Config::loadStringMap(
     const toml::v3::node_view<toml::v3::node> &theNode,
     std::unordered_map<std::string, std::string> &theStringMap) {
-  if (toml::table *arr = theNode.as_table()) {
+  if (toml::table *tbl = theNode.as_table()) {
     theStringMap.clear();
 
-    for (auto it = arr->cbegin(); it != arr->cend(); ++it) {
+    for (auto it = tbl->cbegin(); it != tbl->cend(); ++it) {
       std::string key = it->first.data();
       if (it->second.is_string()) {
         std::optional<std::string> v =

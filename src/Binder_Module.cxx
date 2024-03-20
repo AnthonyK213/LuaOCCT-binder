@@ -11,6 +11,53 @@
 
 extern Binder_Config binder_config;
 
+static std::string luaTypeMap(const Binder_Type &theType) {
+  Binder_Type aType = theType.IsPointerLike() ? theType.GetPointee() : theType;
+  Binder_Cursor aDecl = aType.GetDeclaration();
+  std::string aDeclSpelling = aDecl.Spelling();
+  std::string aTypeSpelling = aType.Spelling();
+
+  static std::unordered_map<std::string, std::string> aMap{
+      {"Standard_Integer", "integer"},
+      {"Standard_Size", "integer"},
+      {"Standard_Real", "number"},
+      {"Standard_Boolean", "boolean"},
+      {"Standard_CString", "string"},
+      {"TCollection_AsciiString", "string"},
+      {"TCollection_ExtendedString", "string"},
+  };
+
+  if (Binder_Util_Contains(aMap, aDeclSpelling)) {
+    return aMap[aDeclSpelling];
+  }
+
+  if (aDeclSpelling == "handle") {
+    Binder_Type aSpecType = clang_Type_getTemplateArgumentAsType(aType, 0);
+    return luaTypeMap(aSpecType);
+  }
+
+  static const std::set<std::string> IS_ARRAY1{
+      "NCollection_Array1",
+      "NCollection_List",
+      "vector",
+  };
+
+  Binder_Type aTp = clang_getTypedefDeclUnderlyingType(aDecl);
+  if (!aTp.IsNull()) {
+    Binder_Cursor aD = aTp.GetDeclaration();
+    std::string aTmplSpelling = aD.Spelling();
+    if (Binder_Util_Contains(IS_ARRAY1, aTmplSpelling)) {
+      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
+      return luaTypeMap(aTmplArgType) + "[]";
+    } else if (aTmplSpelling == "NCollection_Array2") {
+      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
+      return luaTypeMap(aTmplArgType) + "[][]";
+    }
+  }
+
+  return aDeclSpelling;
+}
+
 Binder_Module::Binder_Module(const std::string &theName,
                              Binder_Generator &theParent)
     : myName(theName), myParent(&theParent), myIndex(nullptr),
@@ -149,10 +196,10 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
 
   if (needsDefaultCtor) {
     mySourceStream << "void()";
+    myMetaStream << "---@overload fun():" << aClassSpelling << '\n';
   } else {
     mySourceStream << Binder_Util_Join(
-        aCtors.cbegin(), aCtors.cend(),
-        [&declCopyCtor](const Binder_Cursor &theCtor) {
+        aCtors.cbegin(), aCtors.cend(), [&](const Binder_Cursor &theCtor) {
           if (theCtor.IsCopyCtor())
             declCopyCtor = true;
 
@@ -165,16 +212,28 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
                        return theParam.Type().Spelling();
                      })
               << ')';
+
+          myMetaStream << "---@overload fun("
+                       << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
+                                           [](const Binder_Cursor &theParam) {
+                                             std::ostringstream o{};
+                                             o << theParam.Spelling() << ':'
+                                               << luaTypeMap(theParam.Type());
+                                             return o.str();
+                                           })
+                       << "):" << aClassSpelling << '\n';
+
           return oss.str();
         });
   }
 
   if (!declCopyCtor && theClass.IsCopyable()) {
     mySourceStream << ",void(const " << aClassSpelling << "&)";
+    myMetaStream << "---@overload fun(theOther:" << aClassSpelling
+                 << "):" << aClassSpelling << '\n';
   }
 
   mySourceStream << ">()\n";
-  myMetaStream << "---@operator call:" << aClassSpelling << '\n';
 
   return true;
 }
@@ -202,53 +261,6 @@ static bool isIgnoredMethod(const Binder_Cursor &theMethod) {
     return true;
 
   return false;
-}
-
-static std::string luaTypeMap(const Binder_Type &theType) {
-  Binder_Type aType = theType.IsPointerLike() ? theType.GetPointee() : theType;
-  Binder_Cursor aDecl = aType.GetDeclaration();
-  std::string aDeclSpelling = aDecl.Spelling();
-  std::string aTypeSpelling = aType.Spelling();
-
-  static std::unordered_map<std::string, std::string> aMap{
-      {"Standard_Integer", "integer"},
-      {"Standard_Size", "integer"},
-      {"Standard_Real", "number"},
-      {"Standard_Boolean", "boolean"},
-      {"Standard_CString", "string"},
-      {"TCollection_AsciiString", "string"},
-      {"TCollection_ExtendedString", "string"},
-  };
-
-  if (Binder_Util_Contains(aMap, aDeclSpelling)) {
-    return aMap[aDeclSpelling];
-  }
-
-  if (aDeclSpelling == "handle") {
-    Binder_Type aSpecType = clang_Type_getTemplateArgumentAsType(aType, 0);
-    return luaTypeMap(aSpecType);
-  }
-
-  static const std::set<std::string> IS_ARRAY1{
-      "NCollection_Array1",
-      "NCollection_List",
-      "std::vector",
-  };
-
-  Binder_Type aTp = clang_getTypedefDeclUnderlyingType(aDecl);
-  if (!aTp.IsNull()) {
-    Binder_Cursor aD = aTp.GetDeclaration();
-    std::string aTmplSpelling = aD.Spelling();
-    if (Binder_Util_Contains(IS_ARRAY1, aTmplSpelling)) {
-      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
-      return luaTypeMap(aTmplArgType) + "[]";
-    } else if (aTmplSpelling == "NCollection_Array2") {
-      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
-      return luaTypeMap(aTmplArgType) + "[][]";
-    }
-  }
-
-  return aDeclSpelling;
 }
 
 std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
@@ -435,6 +447,25 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
           return theParam.Type().Spelling();
         });
     oss << ">(&" << aClassSpelling << "::" << aMethodSpelling << ')';
+    myMetaStream << "---@overload fun(";
+    if (!theMethod.IsStaticMethod()) {
+      myMetaStream << "self";
+      if (!aParams.empty())
+        myMetaStream << ',';
+    }
+    myMetaStream << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
+                                     [](const Binder_Cursor &theParam) {
+                                       std::ostringstream o{};
+                                       o << theParam.Spelling() << ':'
+                                         << luaTypeMap(theParam.Type());
+                                       return o.str();
+                                     })
+                 << ")";
+    Binder_Type aRetType = theMethod.ReturnType();
+    if (!aRetType.IsNull() && aRetType.Spelling() != "void") {
+      myMetaStream << ':' << luaTypeMap(aRetType);
+    }
+    myMetaStream << '\n';
   } else {
     oss << '&' << aClassSpelling << "::" << aMethodSpelling;
     for (auto it = aParams.cbegin(); it != aParams.cend(); ++it) {
@@ -539,14 +570,13 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
       mySourceStream << ".addFunction(\"" << aMethodSpelling << "\",";
 
       if (aMethodGroup.HasOverload()) {
+        myMetaStream << "---\n";
+        // myMetaStream << "---@param ... any\n";
         mySourceStream << Binder_Util_Join(
             aMtd.cbegin(), aMtd.cend(),
             [&, this](const Binder_Cursor &theMethod) {
               return generateMethod(theClass, theMethod, "", true);
             });
-        myMetaStream << "---\n";
-        myMetaStream << "---@param ... any\n";
-        myMetaStream << "---@return any\n";
         myMetaStream << "function " << aMethodMeta << ':' << aMethodSpelling
                      << "(...) end\n\n";
       } else {
@@ -564,14 +594,13 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
                      << "\",";
 
       if (aMethodGroup.HasOverload()) {
+        myMetaStream << "---\n";
+        // myMetaStream << "---@param ... any\n";
         mySourceStream << Binder_Util_Join(
             aMtdSt.cbegin(), aMtdSt.cend(),
             [&, this](const Binder_Cursor &theMethod) {
               return generateMethod(theClass, theMethod, suffix, true);
             });
-        myMetaStream << "---\n";
-        myMetaStream << "---@param ... any\n";
-        myMetaStream << "---@return any\n";
         myMetaStream << "function " << aMethodMeta << '.' << aMethodSpelling
                      << suffix << "(...) end\n\n";
       } else {
