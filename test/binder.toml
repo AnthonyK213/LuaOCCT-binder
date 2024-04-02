@@ -1,9 +1,9 @@
 # NOTE: Keep the order correct!!
 modules = [
-  # "Standard",
-  "gp",
+  "Standard",
+  # "gp",
   # "Geom",
-  "LODoc",
+  # "LODoc",
 ]
 
 immutable_type = [
@@ -33,6 +33,7 @@ extra_modules = []
 [black_list]
 class = [
   "Standard",
+  "Standard_UUID", # TODO: Handle the array field...
   "CPnts_MyGaussFunction",
   "CPnts_MyRootFunction",
   "Message_ProgressScope",

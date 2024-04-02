@@ -648,6 +648,9 @@ bool Binder_Module::generateFields(const Binder_Cursor &theStruct) {
 bool Binder_Module::generateStruct(const Binder_Cursor &theStruct,
                                    const Binder_Generator *theParent) {
   std::string aStructSpelling = theStruct.Spelling();
+  if (Binder_Util_Contains(binder_config.myBlackListClass, aStructSpelling))
+    return true;
+
   std::cout << "Binding struct: " << aStructSpelling << '\n';
 
   mySourceStream << ".beginClass<" << aStructSpelling << ">(\""
