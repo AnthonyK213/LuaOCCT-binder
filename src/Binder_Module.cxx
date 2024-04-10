@@ -537,6 +537,9 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
     if (Binder_Util_Contains(binder_config.myBlackListMethod, aFuncName))
       continue;
 
+    bool aManual =
+        Binder_Util_Contains(binder_config.myManualMethod, aFuncName);
+
     if (aMethod.IsOperator()) {
       if (aFuncSpelling == "operator-") {
         if (aMethod.Parameters().empty()) {
@@ -549,7 +552,7 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
       }
     }
 
-    if (Binder_Util_Contains(aGroups, aFuncSpelling)) {
+    if (Binder_Util_Contains(aGroups, aFuncSpelling) && !aManual) {
       aGroups[aFuncSpelling].Add(aMethod);
     } else {
       Binder_MethodGroup aGrp{};
