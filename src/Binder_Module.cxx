@@ -279,7 +279,8 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
   }
 
   if (theMethod.IsOperator()) {
-    oss << "+[](const " << aClassSpelling << " &theSelf";
+    oss << "+[](" << (theMethod.IsConstMethod() ? "const " : "")
+        << aClassSpelling << " &theSelf";
 
     if (aMethodSpelling == "operator-") { /* __unm */
       if (aParams.empty()) {
