@@ -11,7 +11,7 @@ find_path(LIBCLANG_INCLUDE_DIR clang-c
   /opt
   )
 
-find_library(LIBCLANG_LIBRARY_DIR
+find_library(LIBCLANG_LIBRARIES
   NAMES libclang clang
   HINTS
     ENV LIBCLANG_DIR
@@ -25,10 +25,6 @@ find_library(LIBCLANG_LIBRARY_DIR
   /opt
   )
 
-if(LIBCLANG_LIBRARY_DIR)
-  set( LIBCLANG_LIBRARIES "${LIBCLANG_LIBRARY_DIR}" CACHE STRING "Libclang Libraries")
-endif()
-
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set LIBCLANG_FOUND to TRUE if
 # all listed variables are TRUE
@@ -37,5 +33,4 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS(
   REQUIRED_VARS LIBCLANG_LIBRARIES LIBCLANG_INCLUDE_DIR
   )
 
-mark_as_advanced(LIBCLANG_INCLUDE_DIR LIBCLANG_LIBRARIES LIBCLANG_LIBRARY_DIR)
-
+mark_as_advanced(LIBCLANG_INCLUDE_DIR LIBCLANG_LIBRARIES)
