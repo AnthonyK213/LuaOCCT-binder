@@ -709,7 +709,6 @@ bool Binder_Module::Init() {
   myExportName = myExportDir + "/l" + myName;
   myPrefix = myName + "_";
 
-  myHeaderStream = std::ofstream(myExportName + ".h");
   mySourceStream = std::ofstream(myExportName + ".cpp");
   myEnumStream = std::ofstream(myExportDir + "/lenums.h", std::ios::app);
   myMetaStream = std::ofstream(myExportDir + "/_meta/" + myName + ".lua");
@@ -720,15 +719,8 @@ bool Binder_Module::Init() {
 bool Binder_Module::Generate() {
   Binder_Cursor aCursor = clang_getTranslationUnitCursor(myTransUnit);
 
-  std::string aGuard = "_LuaOCCT_l" + myName + "_HeaderFile";
-  myHeaderStream << "/* This file is generated, do not edit. */\n\n";
-  myHeaderStream << "#ifndef " << aGuard << "\n#define " << aGuard << "\n\n";
-  myHeaderStream << "#include \"lenums.h\"\n\n";
-  myHeaderStream << "void luaocct_init_" << myName << "(lua_State *L);\n\n";
-  myHeaderStream << "#endif\n";
-
   mySourceStream << "/* This file is generated, do not edit. */\n\n";
-  mySourceStream << "#include \"l" << myName << ".h\"\n\n";
+  mySourceStream << "#include \"lenums.h\"\n\n";
   mySourceStream << "\nvoid luaocct_init_" << myName << "(lua_State *L) {\n";
   mySourceStream << "luabridge::getGlobalNamespace(L)\n";
   mySourceStream << ".beginNamespace(\"LuaOCCT\")\n";

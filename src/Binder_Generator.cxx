@@ -51,7 +51,7 @@ bool Binder_Generator::GenerateEnumsBegin() {
   aStream << "/* This file is generated, do not edit. */\n\n";
   aStream << "#ifndef _LuaOCCT_lenum_HeaderFile\n#define "
              "_LuaOCCT_lenum_HeaderFile\n\n";
-  aStream << "#include \"lbind.h\"\n\n";
+  aStream << "#include <luaocct_bind/lbind.h>\n\n";
 
   return true;
 }
@@ -71,14 +71,14 @@ bool Binder_Generator::GenerateMain() {
   // The header file.
   std::ofstream aStream{thePath};
   aStream << "/* This file is generated, do not edit. */\n\n";
-  aStream << "#include \"luaocct.h\"\n";
+  aStream << "#include <luaocct/luaocct.h>\n\n";
 
   for (const auto &aMod : binder_config.myModules) {
-    aStream << "#include \"l" << aMod << ".h\"\n";
+    aStream << "extern void luaocct_init_" << aMod << "(lua_State *L);\n";
   }
 
   for (const auto &aMod : binder_config.myExtraModules) {
-    aStream << "#include \"l" << aMod << ".h\"\n";
+    aStream << "extern void luaocct_init_" << aMod << "(lua_State *L);\n";
   }
 
   aStream << "\nint32_t luaopen_luaocct(lua_State *L) {\n";
