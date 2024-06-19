@@ -4,7 +4,9 @@ modules = [
   # "gp",
   # "Geom",
   # "LODoc",
-  "Quantity",
+  # "Quantity",
+  "NCollection",
+  "TopTools",
 ]
 
 immutable_type = [
@@ -15,7 +17,6 @@ immutable_type = [
   "NCollection_Array1",
   "NCollection_Array2",
   "NCollection_List",
-  "NCollection_Map",
   "NCollection_Vec2",
   "NCollection_Vec3",
   "NCollection_Vec4",
@@ -23,6 +24,14 @@ immutable_type = [
   "TCollection_AsciiString",
   "TCollection_ExtendedString",
   "TDF_Label",
+]
+
+template_class = [
+  "NCollection_DataMap",
+  "NCollection_DoubleMap",
+  "NCollection_IndexedDataMap",
+  "NCollection_IndexedMap",
+  "NCollection_Map",
 ]
 
 extra_modules = []
@@ -37,7 +46,7 @@ extra_modules = []
 [black_list]
 class = [
   "Standard",
-  "Standard_UUID", # TODO: Handle the array field...
+  "Standard_UUID",         # TODO: Handle the array field...
   "CPnts_MyGaussFunction",
   "CPnts_MyRootFunction",
   "Message_ProgressScope",

@@ -214,6 +214,10 @@ public:
 #endif
   }
 
+  int GetNumTemplateArguments() const {
+    return clang_Cursor_getNumTemplateArguments(myCursor);
+  }
+
 private:
   CXCursor myCursor;
 };

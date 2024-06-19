@@ -2,7 +2,9 @@
 #define _LuaOCCT_Binder_Module_HeaderFile
 
 #include <fstream>
+#include <stack>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Binder_Cursor.hxx"
@@ -50,6 +52,13 @@ protected:
   void dispose();
 
 private:
+  struct CursorInfo {
+    Binder_Cursor cursor;
+    std::string spelling;
+    std::unordered_map<std::string, std::string> argMap;
+  };
+
+private:
   std::string myName;
   Binder_Generator *myParent;
 
@@ -65,6 +74,8 @@ private:
   std::ofstream mySourceStream;
   std::ofstream myEnumStream;
   std::ofstream myMetaStream;
+
+  std::stack<CursorInfo> myInfoStack;
 };
 
 #endif

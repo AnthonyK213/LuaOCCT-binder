@@ -47,6 +47,14 @@ public:
 
   Binder_Type GetPointee() const { return clang_getPointeeType(myType); }
 
+  int GetNumTempalteArguments() const {
+    return clang_Type_getNumTemplateArguments(myType);
+  }
+
+  Binder_Type GetTemplateArgumentAsType(unsigned int i) const {
+    return clang_Type_getTemplateArgumentAsType(myType, i);
+  }
+
 private:
   CXType myType;
 };

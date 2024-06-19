@@ -671,7 +671,36 @@ bool Binder_Module::generateClass(const Binder_Cursor &theClass,
                                   const Binder_Generator *theParent) {
   std::string aClassSpelling = theClass.Spelling();
   std::cout << "Binding class: " << aClassSpelling << '\n';
-  std::vector<Binder_Cursor> aBases = theClass.Bases();
+
+  bool isClassTemplate = false;
+  Binder_Type aType = theClass.Type();
+  Binder_Cursor aCls = theClass;
+
+  if (aCls.IsTypeDef()) {
+    aType = aCls.UnderlyingTypedefType();
+    aCls = aType.GetDeclaration().GetSpecialization();
+    if (aCls.IsClassTemplate())
+      isClassTemplate = true;
+    else
+      return false;
+  }
+
+  // if (isClassTemplate) {
+
+  //   myInfoStack.push({
+  //       aCls,
+  //       aClassSpelling,
+  //       {},
+  //   });
+  // } else {
+  //   myInfoStack.push({
+  //       aCls,
+  //       aClassSpelling,
+  //       {},
+  //   });
+  // }
+
+  std::vector<Binder_Cursor> aBases = aCls.Bases();
 
   bool baseRegistered = false;
   for (const auto aBase : aBases) {
@@ -694,11 +723,11 @@ bool Binder_Module::generateClass(const Binder_Cursor &theClass,
     myMetaStream << "---@class " << aClassSpelling << '\n';
   }
 
-  generateCtor(theClass);
+  generateCtor(aCls);
 
   myMetaStream << "LuaOCCT." << myName << '.' << aClassSpelling << " = {}\n\n";
 
-  generateMethods(theClass);
+  generateMethods(aCls);
 
   mySourceStream << ".endClass()\n\n";
 
@@ -766,6 +795,28 @@ bool Binder_Module::Generate() {
 
     generateStruct(aStruct, myParent);
   }
+
+  // Bind typedefs.
+  // std::vector<Binder_Cursor> aTypeDefs =
+  //     aCursor.GetChildrenOfKind(CXCursor_TypedefDecl);
+
+  // for (const auto &aTypeDef : aTypeDefs) {
+  //   std::string aClassSpelling = aTypeDef.Spelling();
+
+  //   if (!Binder_Util_StartsWith(aClassSpelling, myPrefix) &&
+  //       aClassSpelling != myName)
+  //     continue;
+
+  //   Binder_Cursor aTDDecl = aTypeDef.UnderlyingTypedefType().GetDeclaration();
+  //   std::string aTDDeclSpelling = aTDDecl.Spelling();
+
+  //   if (aTDDecl.IsClass() &&
+  //       Binder_Util_Contains(binder_config.myTemplateClass, aTDDeclSpelling)) {
+  //     std::cout << "typedef: " << aTDDeclSpelling << ' ' << aClassSpelling
+  //               << '\n';
+  //     generateClass(aTypeDef, myParent);
+  //   }
+  // }
 
   // Bind classes.
   std::vector<Binder_Cursor> aClasses =

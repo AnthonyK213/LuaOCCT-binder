@@ -7,8 +7,20 @@
 #include <unordered_map>
 #include <vector>
 
-class Binder_Config {
-public:
+struct Binder_Config {
+  toml::v3::ex::parse_result myToml;
+  std::vector<std::string> myModules{};
+  std::vector<std::string> myExtraModules{};
+  std::set<std::string> myTemplateClass{};
+  std::set<std::string> myImmutableType{};
+  std::unordered_map<std::string, std::string> myLuaOperators{};
+  std::set<std::string> myBlackListClass{};
+  std::set<std::string> myBlackListMethodByName{};
+  std::set<std::string> myBlackListMethod{};
+  std::set<std::string> myBlackListCopyable{};
+  std::unordered_map<std::string, std::string> myExtraMethod{};
+  std::unordered_map<std::string, std::string> myManualMethod{};
+
   Binder_Config();
 
   ~Binder_Config();
@@ -27,19 +39,6 @@ private:
   static bool
   loadStringMap(const toml::v3::node_view<toml::v3::node> &theNode,
                 std::unordered_map<std::string, std::string> &theStringMap);
-
-public:
-  toml::v3::ex::parse_result myToml;
-  std::vector<std::string> myModules{};
-  std::vector<std::string> myExtraModules{};
-  std::set<std::string> myImmutableType{};
-  std::unordered_map<std::string, std::string> myLuaOperators{};
-  std::set<std::string> myBlackListClass{};
-  std::set<std::string> myBlackListMethodByName{};
-  std::set<std::string> myBlackListMethod{};
-  std::set<std::string> myBlackListCopyable{};
-  std::unordered_map<std::string, std::string> myExtraMethod{};
-  std::unordered_map<std::string, std::string> myManualMethod{};
 };
 
 #endif
