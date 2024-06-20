@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <map>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -56,6 +57,88 @@ static std::string luaTypeMap(const Binder_Type &theType) {
   }
 
   return aDeclSpelling;
+}
+
+static std::string normalizedTypeName(const std::string &theName) {
+  std::regex evilComma("(,\\s*>)");
+  return std::regex_replace(theName, evilComma, ">");
+}
+
+static std::string
+normalizedTypeSpelling(const Binder_Type &theType,
+                       const Binder_Module::CursorInfo &theInfo) {
+  std::string spelling = theType.Spelling();
+
+  if (!theInfo.isTemplate)
+    return spelling;
+
+  std::ostringstream result{};
+  std::ostringstream buffer{};
+  for (const char &c : spelling) {
+    if (isalpha(c) || isdigit(c) || c == '_') {
+      buffer << c;
+    } else {
+      std::string segment = buffer.str();
+      auto iter = theInfo.argMap.find(segment);
+      if (iter != theInfo.argMap.end()) {
+        result << iter->second;
+      } else {
+        result << segment;
+      }
+      result << c;
+      buffer.str("");
+    }
+  }
+
+  std::string segment = buffer.str();
+  if (!segment.empty()) {
+    auto iter = theInfo.argMap.find(segment);
+    if (iter != theInfo.argMap.end()) {
+      result << iter->second;
+    } else {
+      result << segment;
+    }
+  }
+
+  return normalizedTypeName(result.str());
+}
+
+static std::unordered_map<std::string, std::string>
+getTemplateInstanceArgMap(const Binder_Cursor &theCursor) {
+  Binder_Type aType = theCursor.UnderlyingTypedefType();
+  int num = aType.GetNumTempalteArguments();
+  Binder_Cursor aTemplate = aType.GetDeclaration().GetSpecialization();
+  std::string spelling = aTemplate.DisplayName();
+
+  std::unordered_map<std::string, std::string> aMap{};
+  std::ostringstream buffer{};
+  bool found = false;
+  int i = 0;
+  for (const char &c : spelling) {
+    if (found) {
+      if (isalpha(c) || isdigit(c) || c == '_') {
+        buffer << c;
+      } else {
+        std::string key = buffer.str();
+
+        if (key.empty())
+          continue;
+
+        aMap.insert(
+            std::make_pair(key, aType.GetTemplateArgumentAsType(i).Spelling()));
+        i++;
+        buffer.str("");
+
+        if (c == '>') {
+          break;
+        }
+      }
+    } else if (c == '<') {
+      found = true;
+    }
+  }
+
+  return aMap;
 }
 
 Binder_Module::Binder_Module(const std::string &theName,
@@ -168,17 +251,23 @@ bool Binder_Module::generateEnumValue(const Binder_Cursor &theEnum) {
   return true;
 }
 
-bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
+bool Binder_Module::generateCtor(const Binder_Cursor &theClass,
+                                 const CursorInfo &theInfo) {
   if (theClass.IsAbstract() || theClass.IsStaticClass()) {
     std::cout << "Skip ctor: " << theClass.Spelling()
               << " isStatic:" << theClass.IsStaticClass() << '\n';
     return true;
   }
 
-  std::string aClassSpelling = theClass.Spelling();
+  const std::string &aClassSpelling = theInfo.spelling;
   bool needsDefaultCtor = theClass.NeedsDefaultCtor();
 
-  std::vector<Binder_Cursor> aCtors = theClass.Ctors(true);
+  std::vector<Binder_Cursor> aCtorsb = theClass.Ctors(true);
+  // Remove move ctor.
+  std::vector<Binder_Cursor> aCtors{};
+  std::copy_if(
+      aCtorsb.cbegin(), aCtorsb.cend(), std::back_inserter(aCtors),
+      +[](const Binder_Cursor &cursor) { return !cursor.IsMoveCtor(); });
 
   // if no public ctor but non-public, do not bind any ctor.
   if (aCtors.empty() && !needsDefaultCtor)
@@ -206,11 +295,12 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass) {
           std::ostringstream oss{};
           oss << "void(";
           std::vector<Binder_Cursor> aParams = theCtor.Parameters();
-          oss << Binder_Util_Join(
-                     aParams.cbegin(), aParams.cend(),
-                     +[](const Binder_Cursor &theParam) {
-                       return theParam.Type().Spelling();
-                     })
+          oss << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
+                                  [&](const Binder_Cursor &theParam) {
+                                    //  return theParam.Type().Spelling();
+                                    return normalizedTypeSpelling(
+                                        theParam.Type(), theInfo);
+                                  })
               << ')';
 
           myMetaStream << "---@overload fun("
@@ -260,14 +350,21 @@ static bool isIgnoredMethod(const Binder_Cursor &theMethod) {
                            aFuncSpelling))
     return true;
 
+  std::vector<Binder_Cursor> aParams = theMethod.Parameters();
+  for (const Binder_Cursor &aParam : aParams) {
+    if (aParam.Type().IsRvalue())
+      return true;
+  }
+
   return false;
 }
 
 std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
                                           const Binder_Cursor &theMethod,
                                           const std::string &theSuffix,
+                                          const CursorInfo &theInfo,
                                           bool theIsOverload) {
-  std::string aClassSpelling = theClass.Spelling();
+  std::string aClassSpelling = theInfo.spelling;
   std::string aMethodSpelling = theMethod.Spelling();
   std::vector<Binder_Cursor> aParams = theMethod.Parameters();
   std::ostringstream oss{};
@@ -286,15 +383,16 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
       if (aParams.empty()) {
         oss << "){ return -theSelf; }";
       } else { /* __sub */
-        oss << ',' << aParams[0].Type().Spelling()
+        oss << ',' << normalizedTypeSpelling(aParams[0].Type(), theInfo)
             << " theOther){ return theSelf-theOther; }";
       }
     } else {
       if (aParams.empty())
         return "";
 
-      oss << ',' << aParams[0].Type().Spelling() << " theOther){ return theSelf"
-          << aMethodSpelling.substr(8) << "theOther; }";
+      oss << ',' << normalizedTypeSpelling(aParams[0].Type(), theInfo)
+          << " theOther){ return theSelf" << aMethodSpelling.substr(8)
+          << "theOther; }";
     }
 
     return oss.str();
@@ -329,8 +427,9 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
     }
 
     oss << Binder_Util_Join(
-        anIn.cbegin(), anIn.cend(), +[](const Binder_Cursor &theParam) {
-          return theParam.Type().Spelling() + " " + theParam.Spelling();
+        anIn.cbegin(), anIn.cend(), [&](const Binder_Cursor &theParam) {
+          return normalizedTypeSpelling(theParam.Type(), theInfo) + " " +
+                 theParam.Spelling();
         });
 
     Binder_Type aRetType = theMethod.ReturnType();
@@ -345,24 +444,26 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
       if (anHasRetVal)
         oss << aRetTypeSpelling << ',';
 
-      oss << Binder_Util_Join(
-                 anOut.cbegin(), anOut.cend(),
-                 +[](const Binder_Cursor &theParam) {
-                   return theParam.Type().GetPointee().Spelling();
-                 })
+      oss << Binder_Util_Join(anOut.cbegin(), anOut.cend(),
+                              [&](const Binder_Cursor &theParam) {
+                                return normalizedTypeSpelling(
+                                    theParam.Type().GetPointee(), theInfo);
+                              })
           << "> { ";
     } else if (nbReturn == 1) {
       if (anOut.empty())
         oss << ") { ";
       else
-        oss << ")->" << anOut[0].Type().GetPointee().Spelling() << " { ";
+        oss << ")->"
+            << normalizedTypeSpelling(anOut[0].Type().GetPointee(), theInfo)
+            << " { ";
     } else {
       oss << ") { ";
     }
 
     for (const auto &anOutParam : anOut) {
-      oss << anOutParam.Type().GetPointee().Spelling() << ' '
-          << anOutParam.Spelling() << "{};";
+      oss << normalizedTypeSpelling(anOutParam.Type().GetPointee(), theInfo)
+          << ' ' << anOutParam.Spelling() << "{};";
     }
 
     if (anHasRetVal) {
@@ -444,8 +545,8 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
   if (theIsOverload) {
     oss << "luabridge::overload<";
     oss << Binder_Util_Join(
-        aParams.cbegin(), aParams.cend(), +[](const Binder_Cursor &theParam) {
-          return theParam.Type().Spelling();
+        aParams.cbegin(), aParams.cend(), [&](const Binder_Cursor &theParam) {
+          return normalizedTypeSpelling(theParam.Type(), theInfo);
         });
     oss << ">(&" << aClassSpelling << "::" << aMethodSpelling << ')';
     myMetaStream << "---@overload fun(";
@@ -523,7 +624,8 @@ private:
   std::vector<Binder_Cursor> myMethods{};
 };
 
-bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
+bool Binder_Module::generateMethods(const Binder_Cursor &theClass,
+                                    const CursorInfo &theInfo) {
   std::string aClassSpelling = theClass.Spelling();
   std::vector<Binder_Cursor> aMethods =
       theClass.GetChildrenOfKind(CXCursor_CXXMethod);
@@ -579,12 +681,12 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
         mySourceStream << Binder_Util_Join(
             aMtd.cbegin(), aMtd.cend(),
             [&, this](const Binder_Cursor &theMethod) {
-              return generateMethod(theClass, theMethod, "", true);
+              return generateMethod(theClass, theMethod, "", theInfo, true);
             });
         myMetaStream << "function " << aMethodMeta << ':' << aMethodSpelling
                      << "(...) end\n\n";
       } else {
-        mySourceStream << generateMethod(theClass, aMtd[0], "");
+        mySourceStream << generateMethod(theClass, aMtd[0], "", theInfo);
       }
 
       mySourceStream << ")\n";
@@ -603,12 +705,12 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass) {
         mySourceStream << Binder_Util_Join(
             aMtdSt.cbegin(), aMtdSt.cend(),
             [&, this](const Binder_Cursor &theMethod) {
-              return generateMethod(theClass, theMethod, suffix, true);
+              return generateMethod(theClass, theMethod, suffix, theInfo, true);
             });
         myMetaStream << "function " << aMethodMeta << '.' << aMethodSpelling
                      << suffix << "(...) end\n\n";
       } else {
-        mySourceStream << generateMethod(theClass, aMtdSt[0], suffix);
+        mySourceStream << generateMethod(theClass, aMtdSt[0], suffix, theInfo);
       }
 
       mySourceStream << ")\n";
@@ -659,9 +761,10 @@ bool Binder_Module::generateStruct(const Binder_Cursor &theStruct,
 
   mySourceStream << ".beginClass<" << aStructSpelling << ">(\""
                  << aStructSpelling << "\")\n";
-  generateCtor(theStruct);
+  CursorInfo info = {false, theStruct, aStructSpelling, {}};
+  generateCtor(theStruct, info);
   generateFields(theStruct);
-  generateMethods(theStruct);
+  generateMethods(theStruct, info);
   mySourceStream << ".endClass()\n\n";
 
   return true;
@@ -672,33 +775,19 @@ bool Binder_Module::generateClass(const Binder_Cursor &theClass,
   std::string aClassSpelling = theClass.Spelling();
   std::cout << "Binding class: " << aClassSpelling << '\n';
 
-  bool isClassTemplate = false;
   Binder_Type aType = theClass.Type();
   Binder_Cursor aCls = theClass;
+  CursorInfo info{false, aCls, aClassSpelling, {}};
 
   if (aCls.IsTypeDef()) {
     aType = aCls.UnderlyingTypedefType();
     aCls = aType.GetDeclaration().GetSpecialization();
-    if (aCls.IsClassTemplate())
-      isClassTemplate = true;
-    else
+    if (aCls.IsClassTemplate()) {
+      info.isTemplate = true;
+      info.argMap = getTemplateInstanceArgMap(theClass);
+    } else
       return false;
   }
-
-  // if (isClassTemplate) {
-
-  //   myInfoStack.push({
-  //       aCls,
-  //       aClassSpelling,
-  //       {},
-  //   });
-  // } else {
-  //   myInfoStack.push({
-  //       aCls,
-  //       aClassSpelling,
-  //       {},
-  //   });
-  // }
 
   std::vector<Binder_Cursor> aBases = aCls.Bases();
 
@@ -723,11 +812,11 @@ bool Binder_Module::generateClass(const Binder_Cursor &theClass,
     myMetaStream << "---@class " << aClassSpelling << '\n';
   }
 
-  generateCtor(aCls);
+  generateCtor(aCls, info);
 
   myMetaStream << "LuaOCCT." << myName << '.' << aClassSpelling << " = {}\n\n";
 
-  generateMethods(aCls);
+  generateMethods(aCls, info);
 
   mySourceStream << ".endClass()\n\n";
 
@@ -797,26 +886,29 @@ bool Binder_Module::Generate() {
   }
 
   // Bind typedefs.
-  // std::vector<Binder_Cursor> aTypeDefs =
-  //     aCursor.GetChildrenOfKind(CXCursor_TypedefDecl);
+  std::vector<Binder_Cursor> aTypeDefs =
+      aCursor.GetChildrenOfKind(CXCursor_TypedefDecl);
 
-  // for (const auto &aTypeDef : aTypeDefs) {
-  //   std::string aClassSpelling = aTypeDef.Spelling();
+  for (const auto &aTypeDef : aTypeDefs) {
+    std::string aClassSpelling = aTypeDef.Spelling();
 
-  //   if (!Binder_Util_StartsWith(aClassSpelling, myPrefix) &&
-  //       aClassSpelling != myName)
-  //     continue;
+    if (!Binder_Util_StartsWith(aClassSpelling, myPrefix) &&
+        aClassSpelling != myName)
+      continue;
 
-  //   Binder_Cursor aTDDecl = aTypeDef.UnderlyingTypedefType().GetDeclaration();
-  //   std::string aTDDeclSpelling = aTDDecl.Spelling();
+    if (Binder_Util_Contains(binder_config.myBlackListClass, aClassSpelling))
+      continue;
 
-  //   if (aTDDecl.IsClass() &&
-  //       Binder_Util_Contains(binder_config.myTemplateClass, aTDDeclSpelling)) {
-  //     std::cout << "typedef: " << aTDDeclSpelling << ' ' << aClassSpelling
-  //               << '\n';
-  //     generateClass(aTypeDef, myParent);
-  //   }
-  // }
+    Binder_Cursor aTDDecl = aTypeDef.UnderlyingTypedefType().GetDeclaration();
+    std::string aTDDeclSpelling = aTDDecl.Spelling();
+
+    if (aTDDecl.IsClass() &&
+        Binder_Util_Contains(binder_config.myTemplateClass, aTDDeclSpelling)) {
+      std::cout << "typedef: " << aTDDeclSpelling << ' ' << aClassSpelling
+                << '\n';
+      generateClass(aTypeDef, myParent);
+    }
+  }
 
   // Bind classes.
   std::vector<Binder_Cursor> aClasses =

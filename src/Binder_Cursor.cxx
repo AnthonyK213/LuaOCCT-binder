@@ -17,6 +17,10 @@ std::string Binder_Cursor::Spelling() const {
   return Binder_Util_GetCString(clang_getCursorSpelling(myCursor));
 }
 
+std::string Binder_Cursor::DisplayName() const {
+  return Binder_Util_GetCString(clang_getCursorDisplayName(myCursor));
+}
+
 bool Binder_Cursor::IsTransient() const {
   if (Spelling() == "Standard_Transient")
     return true;

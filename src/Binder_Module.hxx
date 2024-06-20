@@ -27,19 +27,29 @@ public:
 
   bool Parse();
 
-protected:
+public:
+  struct CursorInfo {
+    bool isTemplate;
+    Binder_Cursor cursor;
+    std::string spelling;
+    std::unordered_map<std::string, std::string> argMap;
+  };
+
+private:
   bool generateEnumCast(const Binder_Cursor &theEnum);
 
   bool generateEnumValue(const Binder_Cursor &theEnum);
 
-  bool generateCtor(const Binder_Cursor &theClass);
+  bool generateCtor(const Binder_Cursor &theClass, const CursorInfo &theInfo);
 
   std::string generateMethod(const Binder_Cursor &theClass,
                              const Binder_Cursor &theMethod,
                              const std::string &theSuffix,
+                             const CursorInfo &theInfo,
                              bool theIsOverload = false);
 
-  bool generateMethods(const Binder_Cursor &theClass);
+  bool generateMethods(const Binder_Cursor &theClass,
+                       const CursorInfo &theInfo);
 
   bool generateFields(const Binder_Cursor &theStruct);
 
@@ -50,13 +60,6 @@ protected:
                      const Binder_Generator *theParent);
 
   void dispose();
-
-private:
-  struct CursorInfo {
-    Binder_Cursor cursor;
-    std::string spelling;
-    std::unordered_map<std::string, std::string> argMap;
-  };
 
 private:
   std::string myName;
@@ -74,8 +77,6 @@ private:
   std::ofstream mySourceStream;
   std::ofstream myEnumStream;
   std::ofstream myMetaStream;
-
-  std::stack<CursorInfo> myInfoStack;
 };
 
 #endif

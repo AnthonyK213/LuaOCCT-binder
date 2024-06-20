@@ -29,6 +29,8 @@ public:
 
   std::string Spelling() const;
 
+  std::string DisplayName() const;
+
   bool NoDecl() const { return Kind() == CXCursor_NoDeclFound; }
 
   bool IsNull() const { return clang_Cursor_isNull(myCursor) || NoDecl(); }

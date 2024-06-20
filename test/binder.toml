@@ -6,6 +6,7 @@ modules = [
   # "LODoc",
   # "Quantity",
   "NCollection",
+  "BRepExtrema",
   "TopTools",
 ]
 
