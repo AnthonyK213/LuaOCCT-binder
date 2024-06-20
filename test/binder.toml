@@ -1,12 +1,12 @@
 # NOTE: Keep the order correct!!
 modules = [
-  "Standard",
+  # "Standard",
   # "gp",
   # "Geom",
   # "LODoc",
   # "Quantity",
-  "NCollection",
-  "BRepExtrema",
+  # "NCollection",
+  # "BRepExtrema",
   "TopTools",
 ]
 

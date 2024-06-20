@@ -12,13 +12,34 @@
 
 extern Binder_Config binder_config;
 
-static std::string luaTypeMap(const Binder_Type &theType) {
+static std::string
+normalizedTypeSpelling(const std::string &theTypeName,
+                       const Binder_Module::CursorInfo &theInfo);
+
+static std::string
+normalizedTypeSpelling(const Binder_Type &theType,
+                       const Binder_Module::CursorInfo &theInfo);
+
+static std::string luaTypeMap(const Binder_Type &theType,
+                              const Binder_Module::CursorInfo &theInfo) {
   Binder_Type aType = theType.IsPointerLike() ? theType.GetPointee() : theType;
   Binder_Cursor aDecl = aType.GetDeclaration();
+
+  if (aDecl.IsNull()) {
+    std::string aTypeSpelling = aType.Spelling();
+    std::regex removeConst("const\\s+");
+    std::string trimmed = std::regex_replace(aTypeSpelling, removeConst, "");
+    return normalizedTypeSpelling(trimmed, theInfo);
+  }
+
   std::string aDeclSpelling = aDecl.Spelling();
-  std::string aTypeSpelling = aType.Spelling();
 
   static std::unordered_map<std::string, std::string> aMap{
+      {"int", "integer"},
+      {"long", "integer"},
+      {"double", "number"},
+      {"bool", "boolean"},
+      {"char *", "string"},
       {"Standard_Integer", "integer"},
       {"Standard_Size", "integer"},
       {"Standard_Real", "number"},
@@ -33,26 +54,27 @@ static std::string luaTypeMap(const Binder_Type &theType) {
   }
 
   if (aDeclSpelling == "handle") {
-    Binder_Type aSpecType = clang_Type_getTemplateArgumentAsType(aType, 0);
-    return luaTypeMap(aSpecType);
+    Binder_Type aSpecType = aType.GetTemplateArgumentAsType(0);
+    return luaTypeMap(aSpecType, theInfo);
   }
 
   static const std::set<std::string> IS_ARRAY1{
       "NCollection_Array1",
       "NCollection_List",
+      "NCollection_Sequence",
       "vector",
   };
 
-  Binder_Type aTp = clang_getTypedefDeclUnderlyingType(aDecl);
+  Binder_Type aTp = aDecl.UnderlyingTypedefType();
   if (!aTp.IsNull()) {
     Binder_Cursor aD = aTp.GetDeclaration();
     std::string aTmplSpelling = aD.Spelling();
     if (Binder_Util_Contains(IS_ARRAY1, aTmplSpelling)) {
-      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
-      return luaTypeMap(aTmplArgType) + "[]";
+      Binder_Type aTmplArgType = aTp.GetTemplateArgumentAsType(0);
+      return luaTypeMap(aTmplArgType, theInfo) + "[]";
     } else if (aTmplSpelling == "NCollection_Array2") {
-      Binder_Type aTmplArgType = clang_Type_getTemplateArgumentAsType(aTp, 0);
-      return luaTypeMap(aTmplArgType) + "[][]";
+      Binder_Type aTmplArgType = aTp.GetTemplateArgumentAsType(0);
+      return luaTypeMap(aTmplArgType, theInfo) + "[][]";
     }
   }
 
@@ -65,16 +87,14 @@ static std::string normalizedTypeName(const std::string &theName) {
 }
 
 static std::string
-normalizedTypeSpelling(const Binder_Type &theType,
+normalizedTypeSpelling(const std::string &theTypeName,
                        const Binder_Module::CursorInfo &theInfo) {
-  std::string spelling = theType.Spelling();
-
   if (!theInfo.isTemplate)
-    return spelling;
+    return theTypeName;
 
   std::ostringstream result{};
   std::ostringstream buffer{};
-  for (const char &c : spelling) {
+  for (const char &c : theTypeName) {
     if (isalpha(c) || isdigit(c) || c == '_') {
       buffer << c;
     } else {
@@ -101,6 +121,12 @@ normalizedTypeSpelling(const Binder_Type &theType,
   }
 
   return normalizedTypeName(result.str());
+}
+
+static std::string
+normalizedTypeSpelling(const Binder_Type &theType,
+                       const Binder_Module::CursorInfo &theInfo) {
+  return normalizedTypeSpelling(theType.Spelling(), theInfo);
 }
 
 static std::unordered_map<std::string, std::string>
@@ -305,10 +331,11 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass,
 
           myMetaStream << "---@overload fun("
                        << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
-                                           [](const Binder_Cursor &theParam) {
+                                           [&](const Binder_Cursor &theParam) {
                                              std::ostringstream o{};
                                              o << theParam.Spelling() << ':'
-                                               << luaTypeMap(theParam.Type());
+                                               << luaTypeMap(theParam.Type(),
+                                                             theInfo);
                                              return o.str();
                                            })
                        << "):" << aClassSpelling << '\n';
@@ -433,7 +460,8 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
         });
 
     Binder_Type aRetType = theMethod.ReturnType();
-    std::string aRetTypeSpelling = aRetType.Spelling();
+    std::string aRetTypeSpelling =
+        normalizedTypeSpelling(aRetType.Spelling(), theInfo);
     bool anHasRetVal = aRetTypeSpelling != "void";
     int nbReturn = (int)anHasRetVal + anOut.size();
     bool anTupleOut = nbReturn >= 2;
@@ -512,22 +540,24 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
     if (genMeta) {
       for (auto it = anIn.cbegin(); it != anIn.cend(); ++it) {
         myMetaStream << "---@param " << it->Spelling() << ' '
-                     << luaTypeMap(it->Type()) << '\n';
+                     << luaTypeMap(it->Type(), theInfo) << '\n';
       }
       if (anTupleOut) {
         myMetaStream << "---@return {";
         int i = 1;
         if (anHasRetVal) {
-          myMetaStream << '[' << i << "]:" << luaTypeMap(aRetType) << ',';
+          myMetaStream << '[' << i << "]:" << luaTypeMap(aRetType, theInfo)
+                       << ',';
           ++i;
         }
         for (const auto &o : anOut) {
-          myMetaStream << '[' << i << "]:" << luaTypeMap(o.Type()) << ',';
+          myMetaStream << '[' << i << "]:" << luaTypeMap(o.Type(), theInfo)
+                       << ',';
           ++i;
         }
         myMetaStream << '}' << '\n';
       } else if (nbReturn == 1) {
-        myMetaStream << "---@return " << luaTypeMap(aRetType) << '\n';
+        myMetaStream << "---@return " << luaTypeMap(aRetType, theInfo) << '\n';
       }
 
       myMetaStream << aF << '('
@@ -556,27 +586,28 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
         myMetaStream << ',';
     }
     myMetaStream << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
-                                     [](const Binder_Cursor &theParam) {
+                                     [&](const Binder_Cursor &theParam) {
                                        std::ostringstream o{};
                                        o << theParam.Spelling() << ':'
-                                         << luaTypeMap(theParam.Type());
+                                         << luaTypeMap(theParam.Type(),
+                                                       theInfo);
                                        return o.str();
                                      })
                  << ")";
     Binder_Type aRetType = theMethod.ReturnType();
     if (!aRetType.IsNull() && aRetType.Spelling() != "void") {
-      myMetaStream << ':' << luaTypeMap(aRetType);
+      myMetaStream << ':' << luaTypeMap(aRetType, theInfo);
     }
     myMetaStream << '\n';
   } else {
     oss << '&' << aClassSpelling << "::" << aMethodSpelling;
     for (auto it = aParams.cbegin(); it != aParams.cend(); ++it) {
       myMetaStream << "---@param " << it->Spelling() << ' '
-                   << luaTypeMap(it->Type()) << '\n';
+                   << luaTypeMap(it->Type(), theInfo) << '\n';
     }
     Binder_Type aRetType = theMethod.ReturnType();
     if (!aRetType.IsNull() && aRetType.Spelling() != "void") {
-      myMetaStream << "---@return " << luaTypeMap(aRetType) << '\n';
+      myMetaStream << "---@return " << luaTypeMap(aRetType, theInfo) << '\n';
     }
     myMetaStream << aF << '('
                  << Binder_Util_Join(
