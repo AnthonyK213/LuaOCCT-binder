@@ -60,6 +60,7 @@ method = [
   "IntTools_PntOnFace::IsValid",
   "IntTools_PntOn2Faces::IsValid",
   "BOPAlgo_PaveFiller::Iterator",
+  "TopTools_IndexedDataMapOfShapeListOfShape::FindFromKey", # Fuck templates!
 ]
 copyable = ["Geom_SweptSurface", "LODoc_DocumentExplorer"]
 

@@ -657,7 +657,7 @@ private:
 
 bool Binder_Module::generateMethods(const Binder_Cursor &theClass,
                                     const CursorInfo &theInfo) {
-  std::string aClassSpelling = theClass.Spelling();
+  std::string aClassSpelling = theInfo.spelling;
   std::vector<Binder_Cursor> aMethods =
       theClass.GetChildrenOfKind(CXCursor_CXXMethod);
 
