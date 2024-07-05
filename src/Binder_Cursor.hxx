@@ -209,7 +209,7 @@ public:
   GetChildrenOfKind(CXCursorKind theKind, bool thePublicOnly = false) const;
 
   bool IsDeleted() const {
-#if CINDEX_VERSION_ENCODE <= 62
+#if CINDEX_VERSION <= 62
     return false;
 #else
     return clang_CXXMethod_isDeleted(myCursor);

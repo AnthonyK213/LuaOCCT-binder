@@ -7,7 +7,9 @@ modules = [
   # "Quantity",
   # "NCollection",
   # "BRepExtrema",
-  "TopTools",
+  # "TopTools",
+  "math",
+  "Extrema"
 ]
 
 immutable_type = [
