@@ -59,10 +59,8 @@ static std::string luaTypeMap(const Binder_Type &theType,
   }
 
   static const std::set<std::string> IS_ARRAY1{
-      "NCollection_Array1",
       "NCollection_List",
       "NCollection_Sequence",
-      "vector",
   };
 
   Binder_Type aTp = aDecl.UnderlyingTypedefType();
@@ -72,9 +70,6 @@ static std::string luaTypeMap(const Binder_Type &theType,
     if (Binder_Util_Contains(IS_ARRAY1, aTmplSpelling)) {
       Binder_Type aTmplArgType = aTp.GetTemplateArgumentAsType(0);
       return luaTypeMap(aTmplArgType, theInfo) + "[]";
-    } else if (aTmplSpelling == "NCollection_Array2") {
-      Binder_Type aTmplArgType = aTp.GetTemplateArgumentAsType(0);
-      return luaTypeMap(aTmplArgType, theInfo) + "[][]";
     }
   }
 
@@ -91,6 +86,23 @@ normalizedTypeSpelling(const std::string &theTypeName,
                        const Binder_Module::CursorInfo &theInfo) {
   if (!theInfo.isTemplate)
     return theTypeName;
+
+  static std::set<std::string> NCOLLECTION_INTERNAL_TYPE{
+      "value_type",     "const_reference", "reference",
+      "allocator_type", "size_type",       "Iterator"};
+
+  for (const std::string &aT : NCOLLECTION_INTERNAL_TYPE) {
+    size_t pos = theTypeName.find(aT);
+    if (pos != std::string::npos) {
+      std::string aTypeName = theTypeName;
+      aTypeName.insert(pos, theInfo.spelling + "::");
+      return aTypeName;
+    }
+  }
+
+  if (Binder_Util_Contains(NCOLLECTION_INTERNAL_TYPE, theTypeName)) {
+    return theInfo.spelling + "::" + theTypeName;
+  }
 
   std::ostringstream result{};
   std::ostringstream buffer{};
@@ -323,7 +335,6 @@ bool Binder_Module::generateCtor(const Binder_Cursor &theClass,
           std::vector<Binder_Cursor> aParams = theCtor.Parameters();
           oss << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
                                   [&](const Binder_Cursor &theParam) {
-                                    //  return theParam.Type().Spelling();
                                     return normalizedTypeSpelling(
                                         theParam.Type(), theInfo);
                                   })
@@ -538,9 +549,13 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
     }
 
     if (genMeta) {
+      int iUnnamed = 0;
       for (auto it = anIn.cbegin(); it != anIn.cend(); ++it) {
-        myMetaStream << "---@param " << it->Spelling() << ' '
-                     << luaTypeMap(it->Type(), theInfo) << '\n';
+        myMetaStream << "---@param "
+                     << (it->Spelling().empty()
+                             ? "theUnnamed" + std::to_string(iUnnamed)
+                             : it->Spelling())
+                     << ' ' << luaTypeMap(it->Type(), theInfo) << '\n';
       }
       if (anTupleOut) {
         myMetaStream << "---@return {";
@@ -601,20 +616,28 @@ std::string Binder_Module::generateMethod(const Binder_Cursor &theClass,
     myMetaStream << '\n';
   } else {
     oss << '&' << aClassSpelling << "::" << aMethodSpelling;
+    int iUnnamed = 0;
     for (auto it = aParams.cbegin(); it != aParams.cend(); ++it) {
-      myMetaStream << "---@param " << it->Spelling() << ' '
-                   << luaTypeMap(it->Type(), theInfo) << '\n';
+      myMetaStream << "---@param "
+                   << (it->Spelling().empty()
+                           ? "theUnnamed" + std::to_string(iUnnamed)
+                           : it->Spelling())
+                   << ' ' << luaTypeMap(it->Type(), theInfo) << '\n';
     }
     Binder_Type aRetType = theMethod.ReturnType();
     if (!aRetType.IsNull() && aRetType.Spelling() != "void") {
       myMetaStream << "---@return " << luaTypeMap(aRetType, theInfo) << '\n';
     }
+    iUnnamed = 0;
     myMetaStream << aF << '('
-                 << Binder_Util_Join(
-                        aParams.cbegin(), aParams.cend(),
-                        +[](const Binder_Cursor &theParam) {
-                          return theParam.Spelling();
-                        })
+                 << Binder_Util_Join(aParams.cbegin(), aParams.cend(),
+                                     [&](const Binder_Cursor &theParam) {
+                                       std::string s = theParam.Spelling();
+                                       if (!s.empty())
+                                         return s;
+                                       return "theUnnamed" +
+                                              std::to_string(iUnnamed++);
+                                     })
                  << ") end\n\n";
   }
 
@@ -955,8 +978,8 @@ bool Binder_Module::Generate() {
     if (Binder_Util_StrContains(aClassSpelling, "Sequence"))
       continue;
 
-    if (Binder_Util_StrContains(aClassSpelling, "Array"))
-      continue;
+    // if (Binder_Util_StrContains(aClassSpelling, "Array"))
+    //   continue;
 
     if (Binder_Util_StrContains(aClassSpelling, "List"))
       continue;

@@ -1,15 +1,17 @@
 # NOTE: Keep the order correct!!
 modules = [
-  # "Standard",
-  # "gp",
+  "Standard",
+  "gp",
   # "Geom",
   # "LODoc",
   # "Quantity",
-  # "NCollection",
+  "NCollection",
   # "BRepExtrema",
   # "TopTools",
-  "math",
-  "Extrema"
+  # "math",
+  # "Extrema"
+  "TColStd",
+  "TColgp",
 ]
 
 immutable_type = [
@@ -17,8 +19,8 @@ immutable_type = [
   "Standard_CString",
   "Standard_Integer",
   "Standard_Real",
-  "NCollection_Array1",
-  "NCollection_Array2",
+  # "NCollection_Array1",
+  # "NCollection_Array2",
   "NCollection_List",
   "NCollection_Vec2",
   "NCollection_Vec3",
@@ -30,6 +32,8 @@ immutable_type = [
 ]
 
 template_class = [
+  "NCollection_Array1",
+  "NCollection_Array2",
   "NCollection_DataMap",
   "NCollection_DoubleMap",
   "NCollection_IndexedDataMap",
