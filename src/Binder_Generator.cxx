@@ -81,7 +81,7 @@ bool Binder_Generator::GenerateMain() {
     aStream << "extern void luaocct_init_" << aMod << "(lua_State *L);\n";
   }
 
-  aStream << "\nint32_t luaopen_luaocct(lua_State *L) {\n";
+  aStream << "\nint luaopen_luaocct(lua_State *L) {\n";
 
   for (const auto &aMod : binder_config.myModules) {
     aStream << "\tluaocct_init_" << aMod << "(L);\n";
