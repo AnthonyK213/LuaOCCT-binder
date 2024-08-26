@@ -768,7 +768,8 @@ bool Binder_Module::generateMethods(const Binder_Cursor &theClass,
   return true;
 }
 
-bool Binder_Module::generateFields(const Binder_Cursor &theStruct) {
+bool Binder_Module::generateFields(const Binder_Cursor &theStruct,
+                                   const CursorInfo &theInfo) {
   std::string aStructSpelling = theStruct.Spelling();
   std::vector<Binder_Cursor> aFields =
       theStruct.GetChildrenOfKind(CXCursor_FieldDecl, true);
@@ -777,6 +778,8 @@ bool Binder_Module::generateFields(const Binder_Cursor &theStruct) {
     std::string aFieldSpelling = aField.Spelling();
     mySourceStream << ".addProperty(\"" << aFieldSpelling << "\",&"
                    << aStructSpelling << "::" << aFieldSpelling << ")\n";
+    myMetaStream << "---@field " << aFieldSpelling << " "
+                 << luaTypeMap(aField.Type(), theInfo) << '\n';
   }
 
   return true;
@@ -793,8 +796,10 @@ bool Binder_Module::generateStruct(const Binder_Cursor &theStruct,
   mySourceStream << ".beginClass<" << aStructSpelling << ">(\""
                  << aStructSpelling << "\")\n";
   CursorInfo info = {false, theStruct, aStructSpelling, {}};
+  myMetaStream << "---@class " << aStructSpelling << '\n';
   generateCtor(theStruct, info);
-  generateFields(theStruct);
+  generateFields(theStruct, info);
+  myMetaStream << "LuaOCCT." << myName << '.' << aStructSpelling << " = {}\n\n";
   generateMethods(theStruct, info);
   mySourceStream << ".endClass()\n\n";
 

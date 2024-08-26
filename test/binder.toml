@@ -8,8 +8,9 @@ modules = [
   # "NCollection",
   # "BRepExtrema",
   # "TopTools",
-  "math",
-  "Extrema"
+  # "math",
+  # "Extrema"
+  "XCAFPrs"
 ]
 
 immutable_type = [

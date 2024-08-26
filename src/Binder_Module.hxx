@@ -51,7 +51,8 @@ private:
   bool generateMethods(const Binder_Cursor &theClass,
                        const CursorInfo &theInfo);
 
-  bool generateFields(const Binder_Cursor &theStruct);
+  bool generateFields(const Binder_Cursor &theStruct,
+                      const CursorInfo &theInfo);
 
   bool generateStruct(const Binder_Cursor &theStruct,
                       const Binder_Generator *theParent);
